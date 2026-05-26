@@ -38,6 +38,8 @@ import app.splitup.ui.navigation.Route
 import app.splitup.ui.screens.account.AccountScreen
 import app.splitup.ui.screens.activity.ActivityScreen
 import app.splitup.ui.screens.addexpense.AddExpenseScreen
+import app.splitup.ui.screens.addexpense.PaidByPickerScreen
+import app.splitup.ui.screens.addexpense.SplitPickerScreen
 import app.splitup.ui.screens.expense.ExpenseDetailScreen
 import app.splitup.ui.screens.friends.FriendDetailScreen
 import app.splitup.ui.screens.friends.FriendsScreen
@@ -206,6 +208,24 @@ private fun MainNav() {
                         groupId = args.groupId,
                         friendId = args.friendId,
                         onDone = { nav.popBackStack() },
+                        onOpenPaidBy = { nav.navigate(Route.PaidByPicker(args.groupId, args.friendId)) },
+                        onOpenSplit = { nav.navigate(Route.SplitPicker(args.groupId, args.friendId)) },
+                    )
+                }
+                composable<Route.PaidByPicker> { entry ->
+                    val args = entry.toRoute<Route.PaidByPicker>()
+                    PaidByPickerScreen(
+                        groupId = args.groupId,
+                        friendId = args.friendId,
+                        onBack = { nav.popBackStack() },
+                    )
+                }
+                composable<Route.SplitPicker> { entry ->
+                    val args = entry.toRoute<Route.SplitPicker>()
+                    SplitPickerScreen(
+                        groupId = args.groupId,
+                        friendId = args.friendId,
+                        onBack = { nav.popBackStack() },
                     )
                 }
                 composable<Route.SettleUp>(

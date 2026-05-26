@@ -33,7 +33,7 @@ val uiModule = module {
     viewModel { ActivityViewModel(get(), get()) }
     viewModel { AccountViewModel(get()) }
     viewModel { params -> ExpenseDetailViewModel(params.get<ExpenseId>(), get(), get()) }
-    viewModel { AddExpenseViewModel(get(), get(), get()) }
+    viewModel { AddExpenseViewModel(get(), get(), get(), get()) }
     viewModel { SplitwiseImportViewModel(get(), get(), get(), get()) }
     viewModel { params ->
         SettleUpViewModel(

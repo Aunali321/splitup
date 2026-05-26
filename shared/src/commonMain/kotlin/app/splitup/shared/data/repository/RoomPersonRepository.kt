@@ -30,6 +30,8 @@ class RoomPersonRepository(
     override fun observeMe(): Flow<Person> =
         dao.observeMe().filterNotNull().map { it.toDomain() }
 
+    override suspend fun getMe(): Person? = dao.getMe()?.toDomain()
+
     override suspend fun save(person: Person) = dao.upsert(person.toEntity())
 
     override suspend fun delete(id: PersonId) =

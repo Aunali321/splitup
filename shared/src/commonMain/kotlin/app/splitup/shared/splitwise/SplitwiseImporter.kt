@@ -107,17 +107,25 @@ class SplitwiseImporter(
     }
 
     private suspend fun upsertPerson(u: SwUser, isMe: Boolean): PersonId {
-        val existing = people.findByExternal(ExternalSource.SPLITWISE.name, u.id.toString())
+        // For "me": prefer the onboarding row (already isMe=true) over creating a
+        // second one. The Splitwise external_id then attaches to that row so
+        // expense shares — which reference this UUID — line up with state.me.
+        val existing = if (isMe) {
+            people.findByExternal(ExternalSource.SPLITWISE.name, u.id.toString())
+                ?: people.getMe()
+        } else {
+            people.findByExternal(ExternalSource.SPLITWISE.name, u.id.toString())
+        }
         val id = existing?.id ?: PersonId(idGenerator.next())
         val person = Person(
             id = id,
-            firstName = u.first_name ?: "User${u.id}",
-            lastName = u.last_name,
-            email = u.email,
-            avatarUrl = u.picture?.large ?: u.picture?.medium,
-            defaultCurrencyCode = u.default_currency ?: "USD",
-            countryCode = u.country_code,
-            isMe = isMe,
+            firstName = existing?.firstName?.takeIf { it.isNotBlank() } ?: u.first_name ?: "User${u.id}",
+            lastName = existing?.lastName ?: u.last_name,
+            email = existing?.email ?: u.email,
+            avatarUrl = u.picture?.large ?: u.picture?.medium ?: existing?.avatarUrl,
+            defaultCurrencyCode = existing?.defaultCurrencyCode ?: u.default_currency ?: "USD",
+            countryCode = existing?.countryCode ?: u.country_code,
+            isMe = isMe || existing?.isMe == true,
             isRegistered = u.registration_status == "confirmed",
             externalSource = ExternalSource.SPLITWISE,
             externalId = u.id.toString(),

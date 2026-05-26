@@ -25,6 +25,9 @@ interface PersonDao {
     @Query("SELECT * FROM person WHERE is_me = 1 LIMIT 1")
     fun observeMe(): Flow<PersonEntity?>
 
+    @Query("SELECT * FROM person WHERE is_me = 1 LIMIT 1")
+    suspend fun getMe(): PersonEntity?
+
     @Query("SELECT * FROM person WHERE external_source = :source AND external_id = :externalId LIMIT 1")
     suspend fun findByExternal(source: String, externalId: String): PersonEntity?
 

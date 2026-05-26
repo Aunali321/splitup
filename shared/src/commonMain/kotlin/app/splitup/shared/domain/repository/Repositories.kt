@@ -17,6 +17,7 @@ interface PersonRepository {
     suspend fun get(id: PersonId): Person?
     fun observe(id: PersonId): Flow<Person?>
     fun observeMe(): Flow<Person>
+    suspend fun getMe(): Person?
     suspend fun save(person: Person)
     suspend fun delete(id: PersonId)
     suspend fun findByExternal(source: String, externalId: String): Person?

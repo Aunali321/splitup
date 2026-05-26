@@ -1,6 +1,9 @@
 package app.splitup.ui.screens.addexpense
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,101 +11,45 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.CurrencyExchange
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.splitup.shared.data.repository.UserPreferencesRepository
 import app.splitup.shared.domain.model.Currency
 import app.splitup.shared.domain.model.GroupId
-import app.splitup.shared.domain.model.Money
 import app.splitup.shared.domain.model.PersonId
-import app.splitup.shared.domain.repository.PersonRepository
-import app.splitup.shared.domain.usecase.AddExpenseUseCase
-import app.splitup.shared.domain.split.SplitStrategy
-import app.splitup.ui.components.AmountInput
 import app.splitup.ui.components.CurrencyPicker
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
-import kotlinx.datetime.Clock
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
 import org.koin.compose.viewmodel.koinViewModel
-
-class AddExpenseViewModel(
-    private val addExpense: AddExpenseUseCase,
-    prefs: UserPreferencesRepository,
-    people: PersonRepository,
-) : ViewModel() {
-
-    data class State(
-        val currency: Currency = Currency.DEFAULT,
-        val people: List<app.splitup.shared.domain.model.Person> = emptyList(),
-        val me: PersonId? = null,
-    )
-
-    val state: StateFlow<State> = combine(prefs.observe(), people.observeAll()) { p, ppl ->
-        State(
-            currency = p?.homeCurrency ?: Currency.DEFAULT,
-            people = ppl,
-            me = ppl.firstOrNull { it.isMe }?.id,
-        )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), State())
-
-    private val _selectedCurrency = MutableStateFlow<Currency?>(null)
-    val selectedCurrency: StateFlow<Currency?> = _selectedCurrency
-
-    fun setCurrency(c: Currency) { _selectedCurrency.value = c }
-
-    fun submit(
-        groupId: GroupId?,
-        description: String,
-        amount: String,
-        currency: Currency,
-        participantIds: List<PersonId>,
-        payer: PersonId,
-        onDone: () -> Unit,
-    ) {
-        viewModelScope.launch {
-            val total = Money.parse(amount, currency)
-            addExpense(
-                AddExpenseUseCase.Input(
-                    groupId = groupId,
-                    description = description,
-                    total = total,
-                    date = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date,
-                    createdBy = payer,
-                    payers = mapOf(payer to total),
-                    strategy = SplitStrategy.Equal(participantIds),
-                )
-            )
-            onDone()
-        }
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -110,76 +57,239 @@ fun AddExpenseScreen(
     groupId: String?,
     friendId: String?,
     onDone: () -> Unit,
+    onOpenPaidBy: () -> Unit,
+    onOpenSplit: () -> Unit,
 ) {
     val vm: AddExpenseViewModel = koinViewModel()
-    val state by vm.state.collectAsStateWithLifecycle()
-    val selectedOverride by vm.selectedCurrency.collectAsStateWithLifecycle()
-    val currency = selectedOverride ?: state.currency
-    var description by remember { mutableStateOf("") }
-    var amount by remember { mutableStateOf("") }
+    androidx.compose.runtime.LaunchedEffect(groupId, friendId) {
+        vm.bindScope(groupId?.let { GroupId(it) }, friendId?.let { PersonId(it) })
+    }
+    val scope by vm.scope.collectAsStateWithLifecycle()
+    val draftReady by vm.draftReady.collectAsStateWithLifecycle()
+    if (!draftReady) return
+    val draftState by vm.draft.state.collectAsStateWithLifecycle()
     var showCurrencyPicker by remember { mutableStateOf(false) }
 
     if (showCurrencyPicker) {
         CurrencyPicker(
-            onPick = {
-                vm.setCurrency(it)
-                showCurrencyPicker = false
-            },
+            onPick = { vm.draft.setCurrency(it); showCurrencyPicker = false },
             onDismiss = { showCurrencyPicker = false },
         )
     }
+
+    val canSave = draftState.description.isNotBlank() &&
+        draftState.amount.isNotBlank() &&
+        draftState.payers.isNotEmpty() &&
+        draftState.participants.isNotEmpty()
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Add expense", fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
-                    IconButton(onClick = onDone) { Icon(Icons.Outlined.Close, contentDescription = "Cancel") }
+                    IconButton(onClick = onDone) {
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Cancel")
+                    }
                 },
+                actions = {
+                    IconButton(
+                        enabled = canSave,
+                        onClick = {
+                            vm.submit(
+                                groupId = groupId?.let { GroupId(it) },
+                                friendId = friendId?.let { PersonId(it) },
+                                onDone = onDone,
+                            )
+                        },
+                    ) { Icon(Icons.Outlined.Check, contentDescription = "Save") }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
             )
         },
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxSize().padding(padding),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            OutlinedTextField(
-                value = description,
-                onValueChange = { description = it },
-                label = { Text("Description") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-            )
-            AmountInput(
-                currency = currency,
-                value = amount,
-                onValueChange = { amount = it },
-                onCurrencyClick = { showCurrencyPicker = true },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AssistChip(onClick = {}, label = { Text("Paid by you") })
-                AssistChip(onClick = {}, label = { Text("Split equally") })
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "With ",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    "you ",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "and: ",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(8.dp))
+                AssistChip(
+                    onClick = {},
+                    label = { Text(scope.scopeLabel) },
+                    leadingIcon = scope.leadingIcon,
+                )
             }
-            Spacer(Modifier.height(8.dp))
-            val me = state.me
-            Button(
-                onClick = {
-                    if (me != null && description.isNotBlank() && amount.isNotBlank()) {
-                        vm.submit(
-                            groupId = groupId?.let { GroupId(it) },
-                            description = description,
-                            amount = amount,
-                            currency = currency,
-                            participantIds = state.people.map { it.id },
-                            payer = me,
-                            onDone = onDone,
-                        )
-                    }
-                },
-                enabled = me != null && description.isNotBlank() && amount.isNotBlank(),
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("Save") }
+
+            FieldRow(
+                icon = Icons.Outlined.Description,
+                value = draftState.description,
+                placeholder = "Enter a description",
+                onValueChange = vm.draft::setDescription,
+            )
+
+            CurrencyAmountRow(
+                currency = draftState.currency,
+                value = draftState.amount,
+                onValueChange = vm.draft::setAmount,
+                onCurrencyClick = { showCurrencyPicker = true },
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Paid by ",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                AssistChip(
+                    onClick = onOpenPaidBy,
+                    label = { Text(vm.payerLabel(scope, draftState)) },
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "and split ",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                AssistChip(
+                    onClick = onOpenSplit,
+                    label = { Text(draftState.strategy.label) },
+                )
+            }
+
+            Spacer(Modifier.weight(1f))
+
+            ScopeFooter(scope.scopeLabel)
         }
     }
 }
+
+@Composable
+private fun FieldRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    value: String,
+    placeholder: String,
+    onValueChange: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Spacer(Modifier.width(12.dp))
+        TextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = { Text(placeholder, style = MaterialTheme.typography.titleMedium) },
+            textStyle = MaterialTheme.typography.titleMedium,
+            singleLine = true,
+            colors = transparentFieldColors(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun CurrencyAmountRow(
+    currency: Currency,
+    value: String,
+    onValueChange: (String) -> Unit,
+    onCurrencyClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clickable(onClick = onCurrencyClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                currency.symbol,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        TextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = { Text("0${decimalSep(currency)}00", style = MaterialTheme.typography.headlineMedium) },
+            textStyle = MaterialTheme.typography.headlineMedium,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            singleLine = true,
+            colors = transparentFieldColors(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun ScopeFooter(scopeLabel: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Outlined.CurrencyExchange,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(scopeLabel, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun transparentFieldColors() = TextFieldDefaults.colors(
+    focusedContainerColor = Color.Transparent,
+    unfocusedContainerColor = Color.Transparent,
+    disabledContainerColor = Color.Transparent,
+    focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+    unfocusedIndicatorColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+)
+
+private fun decimalSep(currency: Currency): String = if (currency.decimals == 0) "" else "."
+
+private val AddExpenseDraft.SplitMode.label: String
+    get() = when (this) {
+        AddExpenseDraft.SplitMode.Equal -> "equally"
+        AddExpenseDraft.SplitMode.Unequally -> "unequally"
+        AddExpenseDraft.SplitMode.Percent -> "by percentages"
+        AddExpenseDraft.SplitMode.Shares -> "by shares"
+    }
