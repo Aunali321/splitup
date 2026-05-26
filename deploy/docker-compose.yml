@@ -1,0 +1,110 @@
+# Self-hosted SplitUp! stack.
+#
+# Default profile: postgres + splitup-server (single-device usage).
+# `sync` profile adds pg-storage + powersync for multi-device sync.
+#
+#   cp .env.example .env && $EDITOR .env
+#   docker compose up -d                         # default
+#   docker compose --profile sync up -d          # with sync
+
+services:
+  # ──────────── Application data ─────────────────────────────────────────
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: splitup
+      POSTGRES_PASSWORD: splitup
+      POSTGRES_DB: splitup
+    # wal_level=logical is the bare-minimum for PowerSync's CDC even on the
+    # default profile, so users opting into sync later don't have to recreate
+    # the volume.
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U splitup -d splitup"]
+      interval: 5s
+      retries: 10
+
+  splitup-server:
+    build:
+      context: ..
+      dockerfile: deploy/server.Dockerfile
+    image: ghcr.io/aunali321/splitup-server:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 8080
+      DATABASE_URL: jdbc:postgresql://postgres:5432/splitup
+      DATABASE_USER: splitup
+      DATABASE_PASSWORD: splitup
+      # 32 raw bytes, encoded as base64url (URL-safe, unpadded).
+      # Same value is consumed by PowerSync as the HS256 JWK below.
+      SPLITUP_SESSION_SECRET: ${SPLITUP_SESSION_SECRET:?run 'openssl rand -base64 32 | tr +/ -_ | tr -d =' and put in .env}
+      OPEN_EXCHANGE_RATES_API_KEY: ${OPEN_EXCHANGE_RATES_API_KEY:-}
+    ports:
+      - "${SPLITUP_PORT:-8080}:8080"
+
+  # ──────────── PowerSync state (separate Postgres) ───────────────────────
+  pg-storage:
+    image: postgres:17-alpine
+    profiles: ["sync"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: powersync
+      POSTGRES_PASSWORD: powersync
+      POSTGRES_DB: powersync
+    volumes:
+      - pg-storage-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U powersync -d powersync"]
+      interval: 5s
+      retries: 10
+
+  powersync:
+    image: journeyapps/powersync-service:latest
+    profiles: ["sync"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pg-storage:
+        condition: service_healthy
+    command: ["start", "-r", "unified"]
+    environment:
+      POWERSYNC_CONFIG_PATH: /config/service.yaml
+      NODE_OPTIONS: --max-old-space-size=1000
+      PS_DATA_SOURCE_URI: postgres://splitup:splitup@postgres:5432/splitup
+      PS_STORAGE_SOURCE_URI: postgres://powersync:powersync@pg-storage:5432/powersync
+      PS_PORT: 8080
+      PS_JWT_SECRET_B64URL: ${SPLITUP_SESSION_SECRET:?run 'openssl rand -base64 32 | tr +/ -_ | tr -d =' and put in .env}
+      PS_MANAGEMENT_TOKEN: ${POWERSYNC_MANAGEMENT_TOKEN:-please-change-me-in-env}
+    ports:
+      - "${POWERSYNC_PORT:-8081}:8080"
+    volumes:
+      - ./powersync:/config:ro
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:8080/probes/liveness').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
+      interval: 5s
+      timeout: 1s
+      retries: 15
+
+volumes:
+  postgres-data:
+  pg-storage-data:

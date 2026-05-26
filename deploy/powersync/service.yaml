@@ -1,0 +1,45 @@
+# yaml-language-server: $schema=https://unpkg.com/@powersync/service-schema@latest/json-schema/powersync-config.json
+#
+# PowerSync v1.21+ service configuration for SplitUp!
+#
+# Substitution: only env vars prefixed PS_ may be inlined via `!env`.
+
+telemetry:
+  disable_telemetry_sharing: true
+
+replication:
+  connections:
+    - type: postgresql
+      uri: !env PS_DATA_SOURCE_URI
+      sslmode: disable
+
+storage:
+  type: postgresql
+  uri: !env PS_STORAGE_SOURCE_URI
+  sslmode: disable
+
+port: !env PS_PORT
+
+sync_config:
+  path: sync-config.yaml
+
+client_auth:
+  # Static symmetric JWK. Tokens are minted by the splitup server using the same
+  # secret; both services read it from the host environment so we never put it
+  # in source.
+  jwks:
+    keys:
+      - kty: oct
+        kid: splitup-session
+        alg: HS256
+        k: !env PS_JWT_SECRET_B64URL
+  audience: ["splitup"]
+
+api:
+  tokens:
+    - !env PS_MANAGEMENT_TOKEN
+
+system:
+  logging:
+    level: info
+    format: text

@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://unpkg.com/@powersync/service-sync-rules@latest/schema/sync_rules.json
+
+config:
+  edition: 3
+
+streams:
+  by_account:
+    auto_subscribe: true
+    queries:
+      - SELECT * FROM person          WHERE account_id = auth.user_id()
+      - SELECT * FROM group_          WHERE account_id = auth.user_id()
+      - SELECT gm.* FROM group_member gm
+          JOIN group_ g ON g.id = gm.group_id
+          WHERE g.account_id = auth.user_id()
+      - SELECT * FROM expense         WHERE account_id = auth.user_id()
+      - SELECT es.* FROM expense_share es
+          JOIN expense e ON e.id = es.expense_id
+          WHERE e.account_id = auth.user_id()
+      - SELECT * FROM settlement      WHERE account_id = auth.user_id()
+      - SELECT * FROM comment         WHERE account_id = auth.user_id()
+      - SELECT * FROM user_preferences WHERE account_id = auth.user_id()
+
+  reference:
+    auto_subscribe: true
+    queries:
+      - SELECT * FROM category
+      - SELECT * FROM exchange_rate
