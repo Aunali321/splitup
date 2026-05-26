@@ -15,3 +15,9 @@ Pods/
 .env.local
 *.log
 node_modules/
+
+# Room writes exported schemas here when KSP runs.
+shared/schemas/
+
+# docker-compose secrets — see deploy/.env.example
+deploy/.env

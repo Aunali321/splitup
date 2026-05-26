@@ -1,0 +1,16 @@
+# Speed up Docker builds — only the project sources are needed.
+.git
+.gradle
+build
+**/build
+**/.kotlin
+**/captures
+.idea
+*.iml
+local.properties
+.env
+.env.local
+*.log
+node_modules
+**/xcuserdata
+deploy/postgres-data
