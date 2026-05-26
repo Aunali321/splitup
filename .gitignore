@@ -1,0 +1,17 @@
+.gradle/
+build/
+out/
+.idea/
+*.iml
+local.properties
+.DS_Store
+.kotlin/
+captures/
+**/xcuserdata/
+xcuserdata/
+**/*.xcworkspace/xcuserdata/
+Pods/
+.env
+.env.local
+*.log
+node_modules/
