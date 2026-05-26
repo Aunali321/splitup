@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -102,6 +103,10 @@ private fun MainNav() {
     } ?: BottomTab.GROUPS
 
     Scaffold(
+        // The inner screens use their own Scaffold + TopAppBar, which already
+        // handle the status-bar inset. The bottom NavigationBar is the only
+        // thing we hand back to inner screens via PaddingValues.
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             NavigationBar {
                 BottomTab.entries.forEach { tab ->

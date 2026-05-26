@@ -21,7 +21,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -80,8 +80,11 @@ fun SplitPickerScreen(
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            PrimaryTabRow(selectedTabIndex = mode.ordinal) {
-                AddExpenseDraft.SplitMode.entries.forEachIndexed { index, m ->
+            PrimaryScrollableTabRow(
+                selectedTabIndex = mode.ordinal,
+                edgePadding = 16.dp,
+            ) {
+                AddExpenseDraft.SplitMode.entries.forEach { m ->
                     Tab(
                         selected = mode == m,
                         onClick = { vm.draft.setStrategy(m) },
@@ -90,9 +93,10 @@ fun SplitPickerScreen(
                                 when (m) {
                                     AddExpenseDraft.SplitMode.Equal -> "Equally"
                                     AddExpenseDraft.SplitMode.Unequally -> "Unequally"
-                                    AddExpenseDraft.SplitMode.Percent -> "By %"
+                                    AddExpenseDraft.SplitMode.Percent -> "By percentages"
                                     AddExpenseDraft.SplitMode.Shares -> "By shares"
                                 },
+                                maxLines = 1,
                             )
                         },
                     )
