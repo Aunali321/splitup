@@ -32,7 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.splitup.shared.domain.model.GroupId
 import app.splitup.shared.domain.model.PersonId
 import app.splitup.ui.components.PersonAvatar
-import org.koin.compose.viewmodel.koinViewModel
+import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,11 +41,13 @@ fun PaidByPickerScreen(
     friendId: String?,
     onBack: () -> Unit,
 ) {
-    val vm: AddExpenseViewModel = koinViewModel()
+    val vm: AddExpenseViewModel = koinInject()
     LaunchedEffect(groupId, friendId) {
-        vm.bindScope(groupId?.let { GroupId(it) }, friendId?.let { PersonId(it) })
+        vm.start(groupId?.let { GroupId(it) }, friendId?.let { PersonId(it) })
     }
     val scope by vm.scope.collectAsStateWithLifecycle()
+    val draftReady by vm.draftReady.collectAsStateWithLifecycle()
+    if (!draftReady) return
     val state by vm.draft.state.collectAsStateWithLifecycle()
     val selected = state.payers.keys.firstOrNull()
 

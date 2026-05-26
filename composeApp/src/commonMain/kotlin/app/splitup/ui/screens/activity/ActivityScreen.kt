@@ -73,9 +73,7 @@ fun ActivityScreen(onOpenExpense: (ExpenseId) -> Unit) {
             } else {
                 LazyColumn {
                     items(state.expenses, key = { it.id.value }) { e ->
-                        val payer = e.shares.firstOrNull { it.paidShare.isPositive }?.personId
-                        val payerName = payer?.let { state.nameById[it] } ?: "Someone"
-                        ExpenseRow(expense = e, me = me, payerName = payerName, onClick = { onOpenExpense(e.id) })
+                        ExpenseRow(expense = e, me = me, nameById = state.nameById, onClick = { onOpenExpense(e.id) })
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
                     }
                 }

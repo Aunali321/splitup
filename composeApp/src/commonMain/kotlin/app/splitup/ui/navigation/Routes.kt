@@ -35,8 +35,8 @@ sealed interface Route {
 }
 
 enum class BottomTab(val route: Route, val label: String) {
-    FRIENDS(Route.Friends, "Friends"),
     GROUPS(Route.Groups, "Groups"),
+    FRIENDS(Route.Friends, "Friends"),
     ACTIVITY(Route.Activity, "Activity"),
     ACCOUNT(Route.Account, "Account"),
 }

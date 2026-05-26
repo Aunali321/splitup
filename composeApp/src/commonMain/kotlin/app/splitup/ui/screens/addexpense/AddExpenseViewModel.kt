@@ -1,8 +1,6 @@
 package app.splitup.ui.screens.addexpense
 
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.splitup.shared.data.repository.UserPreferencesRepository
@@ -26,12 +24,9 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
 /**
- * Single ViewModel shared by the main Add Expense form and the Paid-by / Split
- * pickers — they all need the same draft.
- *
- * Lifecycle: created when the user opens Add Expense, retained across the picker
- * sub-routes via the nav graph's lifecycle scope. (Koin's default scope is fine —
- * each call to koinViewModel() inside the same NavBackStackEntry shares it.)
+ * App-lifetime ViewModel shared by the Add Expense form and the two pickers
+ * (Paid-by, Split). Lifecycle is managed via [start] / [reset] from the form
+ * — pickers are pure consumers of the same draft.
  */
 class AddExpenseViewModel(
     private val addExpense: AddExpenseUseCase,
@@ -58,67 +53,59 @@ class AddExpenseViewModel(
     private lateinit var draftBacking: AddExpenseDraft
     val draft: AddExpenseDraft get() = draftBacking
 
-    val homePrefs: StateFlow<Currency> = combine(prefs.observe(), people.observeAll()) { p, _ -> p.homeCurrency }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, Currency.DEFAULT)
+    private val homePrefs: StateFlow<Currency> =
+        combine(prefs.observe(), people.observeAll()) { p, _ -> p.homeCurrency }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, Currency.DEFAULT)
 
-    fun bindScope(groupId: GroupId?, friendId: PersonId?) {
+    /**
+     * Open a fresh draft for a given scope. Idempotent within the same scope —
+     * calling twice from a recomposition won't wipe user input.
+     */
+    fun start(groupId: GroupId?, friendId: PersonId?) {
+        // If we're re-opening for the same scope, keep existing draft.
+        val existing = _scope.value
+        if (_draftReady.value && existing.groupId == groupId && existing.friendId == friendId) return
+
         viewModelScope.launch {
             val me = people.getMe()
             val currency = homePrefs.value
             val today = clock.now().toLocalDateTime(timeZone).date
-            when {
+
+            val (label, members) = when {
                 groupId != null -> {
                     val g = groups.get(groupId) ?: return@launch
                     val memberPeople = g.members.mapNotNull { people.get(it.personId) }
-                    _scope.value = Scope(
-                        scopeLabel = "All of ${g.name}",
-                        groupId = groupId,
-                        members = memberPeople,
-                    )
-                    if (!_draftReady.value) {
-                        draftBacking = AddExpenseDraft(
-                            initialCurrency = currency,
-                            initialMe = me?.id,
-                            initialParticipants = memberPeople.map { it.id },
-                            initialDate = today,
-                        )
-                        _draftReady.value = true
-                    }
+                    "All of ${g.name}" to memberPeople
                 }
                 friendId != null -> {
                     val friend = people.get(friendId) ?: return@launch
-                    val participants = listOfNotNull(me, friend)
-                    _scope.value = Scope(
-                        scopeLabel = friend.displayName,
-                        friendId = friendId,
-                        members = participants,
-                    )
-                    if (!_draftReady.value) {
-                        draftBacking = AddExpenseDraft(
-                            initialCurrency = currency,
-                            initialMe = me?.id,
-                            initialParticipants = participants.map { it.id },
-                            initialDate = today,
-                        )
-                        _draftReady.value = true
-                    }
+                    friend.displayName to listOfNotNull(me, friend)
                 }
                 else -> {
                     val all: List<Person> = people.observeFriends().first()
-                    val participants: List<Person> = listOfNotNull(me) + all
-                    _scope.value = Scope(scopeLabel = "everyone", members = participants)
-                    if (!_draftReady.value) {
-                        draftBacking = AddExpenseDraft(
-                            initialCurrency = currency,
-                            initialMe = me?.id,
-                            initialParticipants = participants.map { it.id },
-                            initialDate = today,
-                        )
-                        _draftReady.value = true
-                    }
+                    "everyone" to listOfNotNull(me) + all
                 }
             }
+
+            _scope.value = Scope(
+                scopeLabel = label,
+                groupId = groupId,
+                friendId = friendId,
+                members = members,
+            )
+            draftBacking = AddExpenseDraft(
+                initialCurrency = currency,
+                initialMe = me?.id,
+                initialParticipants = members.map { it.id },
+                initialDate = today,
+            )
+            _draftReady.value = true
         }
+    }
+
+    fun reset() {
+        _draftReady.value = false
+        _scope.value = Scope("everyone")
     }
 
     fun payerLabel(scope: Scope, state: AddExpenseDraft.State): String {
@@ -143,7 +130,6 @@ class AddExpenseViewModel(
             val s = draft.state.value
             val total = Money.parse(s.amount.ifBlank { "0" }, s.currency)
             require(total.isPositive) { "Amount must be positive" }
-            // Re-balance single-payer to the (possibly-changed) total.
             val payers = if (s.payers.size == 1) mapOf(s.payers.keys.first() to total) else s.payers
             addExpense(
                 AddExpenseUseCase.Input(
@@ -156,6 +142,7 @@ class AddExpenseViewModel(
                     strategy = draft.buildStrategy(),
                 ),
             )
+            reset()
             onDone()
         }
     }

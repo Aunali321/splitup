@@ -1,5 +1,6 @@
 package app.splitup.ui.screens.groups
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,10 +15,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.House
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Flight
+import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -26,6 +30,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -133,14 +140,24 @@ fun GroupsScreen(onOpenGroup: (GroupId) -> Unit) {
 @Composable
 private fun GroupRow(group: Group, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector = groupIcon(group.type),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-        )
+        val tint = groupTint(group.name)
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(tint),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = groupIcon(group.type),
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(28.dp),
+            )
+        }
         Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(group.name, style = MaterialTheme.typography.titleMedium)
@@ -151,6 +168,18 @@ private fun GroupRow(group: Group, onClick: () -> Unit) {
             )
         }
     }
+}
+
+private val groupTints = listOf(
+    Color(0xFFE65100), Color(0xFF1B7F44), Color(0xFF7A4F9C),
+    Color(0xFFC2185B), Color(0xFF1976D2), Color(0xFF00897B),
+    Color(0xFFD84315), Color(0xFF455A64),
+)
+
+private fun groupTint(name: String): Color {
+    var h = 0
+    for (c in name) h = 31 * h + c.code
+    return groupTints[(h.rem(groupTints.size) + groupTints.size).rem(groupTints.size)]
 }
 
 @Composable
@@ -172,7 +201,8 @@ private fun EmptyGroups() {
     }
 }
 
-private fun groupIcon(type: GroupType) = when (type) {
-    GroupType.HOME, GroupType.APARTMENT, GroupType.HOUSE -> Icons.Outlined.House
+private fun groupIcon(type: GroupType): ImageVector = when (type) {
+    GroupType.HOME, GroupType.APARTMENT, GroupType.HOUSE -> Icons.Rounded.Home
+    GroupType.TRIP -> Icons.Rounded.Flight
     else -> Icons.Outlined.Groups
 }

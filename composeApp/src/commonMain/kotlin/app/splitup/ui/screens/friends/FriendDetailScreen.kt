@@ -113,7 +113,7 @@ fun FriendDetailScreen(
                 }
                 items(state.expenses, key = { it.id.value }) { e ->
                     if (me != null) {
-                        ExpenseRow(expense = e, me = me, payerName = "", onClick = { onOpenExpense(e.id) })
+                        ExpenseRow(expense = e, me = me, nameById = emptyMap(), onClick = { onOpenExpense(e.id) })
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
                     }
                 }

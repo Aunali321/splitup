@@ -49,7 +49,7 @@ import app.splitup.shared.domain.model.Currency
 import app.splitup.shared.domain.model.GroupId
 import app.splitup.shared.domain.model.PersonId
 import app.splitup.ui.components.CurrencyPicker
-import org.koin.compose.viewmodel.koinViewModel
+import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,9 +60,9 @@ fun AddExpenseScreen(
     onOpenPaidBy: () -> Unit,
     onOpenSplit: () -> Unit,
 ) {
-    val vm: AddExpenseViewModel = koinViewModel()
+    val vm: AddExpenseViewModel = koinInject()
     androidx.compose.runtime.LaunchedEffect(groupId, friendId) {
-        vm.bindScope(groupId?.let { GroupId(it) }, friendId?.let { PersonId(it) })
+        vm.start(groupId?.let { GroupId(it) }, friendId?.let { PersonId(it) })
     }
     val scope by vm.scope.collectAsStateWithLifecycle()
     val draftReady by vm.draftReady.collectAsStateWithLifecycle()
