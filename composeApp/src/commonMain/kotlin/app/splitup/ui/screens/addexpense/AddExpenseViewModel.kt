@@ -5,13 +5,18 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.splitup.shared.data.repository.UserPreferencesRepository
 import app.splitup.shared.domain.model.Currency
+import app.splitup.shared.domain.model.Expense
+import app.splitup.shared.domain.model.ExpenseId
 import app.splitup.shared.domain.model.GroupId
 import app.splitup.shared.domain.model.Money
 import app.splitup.shared.domain.model.Person
 import app.splitup.shared.domain.model.PersonId
+import app.splitup.shared.domain.repository.ExpenseRepository
 import app.splitup.shared.domain.repository.GroupRepository
 import app.splitup.shared.domain.repository.PersonRepository
+import app.splitup.shared.domain.split.SplitStrategy
 import app.splitup.shared.domain.usecase.AddExpenseUseCase
+import app.splitup.shared.domain.usecase.EditExpenseUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -30,9 +35,11 @@ import kotlinx.datetime.toLocalDateTime
  */
 class AddExpenseViewModel(
     private val addExpense: AddExpenseUseCase,
+    private val editExpense: EditExpenseUseCase,
     prefs: UserPreferencesRepository,
     private val people: PersonRepository,
     private val groups: GroupRepository,
+    private val expenses: ExpenseRepository,
     private val clock: Clock = Clock.System,
     private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
 ) : ViewModel() {
@@ -53,20 +60,36 @@ class AddExpenseViewModel(
     private lateinit var draftBacking: AddExpenseDraft
     val draft: AddExpenseDraft get() = draftBacking
 
+    // The expense being edited, or null when adding. Drives the screen title and the
+    // submit path (update-in-place vs. create).
+    private val _editing = MutableStateFlow<Expense?>(null)
+    val editing: StateFlow<Expense?> = _editing
+
     private val homePrefs: StateFlow<Currency> =
         combine(prefs.observe(), people.observeAll()) { p, _ -> p.homeCurrency }
             .stateIn(viewModelScope, SharingStarted.Eagerly, Currency.DEFAULT)
 
     /**
-     * Open a fresh draft for a given scope. Idempotent within the same scope —
-     * calling twice from a recomposition won't wipe user input.
+     * Open a draft for a scope, or hydrate one from [expenseId] to edit it. Idempotent
+     * within the same scope/expense — calling twice from a recomposition (or from a
+     * picker that shares this VM) won't wipe user input.
      */
-    fun start(groupId: GroupId?, friendId: PersonId?) {
-        // If we're re-opening for the same scope, keep existing draft.
+    fun start(groupId: GroupId?, friendId: PersonId?, expenseId: String? = null) {
         val existing = _scope.value
-        if (_draftReady.value && existing.groupId == groupId && existing.friendId == friendId) return
+        if (_draftReady.value &&
+            existing.groupId == groupId &&
+            existing.friendId == friendId &&
+            _editing.value?.id?.value == expenseId
+        ) {
+            return
+        }
 
         viewModelScope.launch {
+            if (expenseId != null) {
+                loadForEdit(ExpenseId(expenseId), groupId, friendId)
+                return@launch
+            }
+
             val me = people.getMe()
             val currency = homePrefs.value
             val today = clock.now().toLocalDateTime(timeZone).date
@@ -87,6 +110,7 @@ class AddExpenseViewModel(
                 }
             }
 
+            _editing.value = null
             _scope.value = Scope(
                 scopeLabel = label,
                 groupId = groupId,
@@ -103,8 +127,51 @@ class AddExpenseViewModel(
         }
     }
 
+    private suspend fun loadForEdit(expenseId: ExpenseId, groupId: GroupId?, friendId: PersonId?) {
+        val expense = expenses.get(expenseId) ?: return
+        val group = expense.groupId?.let { groups.get(it) }
+        val members = if (group != null) {
+            group.members.mapNotNull { people.get(it.personId) }
+        } else {
+            expense.shares.mapNotNull { people.get(it.personId) }
+        }
+
+        val (mode, splitInputs, participants) = reverseSplit(expense)
+        val payers = expense.shares.filter { it.paidShare.isPositive }.associate { it.personId to it.paidShare }
+
+        _editing.value = expense
+        _scope.value = Scope(
+            scopeLabel = group?.let { "All of ${it.name}" } ?: "you",
+            groupId = groupId,
+            friendId = friendId,
+            members = members,
+        )
+        draftBacking = AddExpenseDraft(
+            initialCurrency = expense.cost.currency,
+            initialMe = people.getMe()?.id,
+            initialParticipants = participants,
+            initialDate = expense.date,
+        )
+        draftBacking.set(
+            AddExpenseDraft.State(
+                description = expense.description,
+                amount = expense.cost.toInput(),
+                currency = expense.cost.currency,
+                date = expense.date,
+                participants = participants,
+                payers = payers,
+                strategy = mode,
+                splitInputs = splitInputs,
+                multiplePayers = payers.size > 1,
+                payerInputs = if (payers.size > 1) payers.mapValues { it.value.toInput() } else emptyMap(),
+            ),
+        )
+        _draftReady.value = true
+    }
+
     fun reset() {
         _draftReady.value = false
+        _editing.value = null
         _scope.value = Scope("everyone")
     }
 
@@ -126,24 +193,74 @@ class AddExpenseViewModel(
         friendId: PersonId?,
         onDone: () -> Unit,
     ) {
+        // UI keeps the Save action disabled while these are non-null; guard anyway so a
+        // stale recomposition can never feed the split engine an allocation it rejects.
+        if (draft.splitError() != null || draft.payerError() != null) return
         viewModelScope.launch {
             val s = draft.state.value
             val total = Money.parse(s.amount.ifBlank { "0" }, s.currency)
             require(total.isPositive) { "Amount must be positive" }
             val payers = if (s.payers.size == 1) mapOf(s.payers.keys.first() to total) else s.payers
-            addExpense(
-                AddExpenseUseCase.Input(
-                    groupId = groupId,
-                    description = s.description,
-                    total = total,
-                    date = s.date,
-                    createdBy = payers.keys.first(),
-                    payers = payers,
-                    strategy = draft.buildStrategy(),
-                ),
-            )
+            val original = _editing.value
+            if (original != null) {
+                editExpense(
+                    EditExpenseUseCase.Input(
+                        original = original,
+                        description = s.description,
+                        total = total,
+                        date = s.date,
+                        payers = payers,
+                        strategy = draft.buildStrategy(),
+                    ),
+                )
+            } else {
+                addExpense(
+                    AddExpenseUseCase.Input(
+                        groupId = groupId,
+                        description = s.description,
+                        total = total,
+                        date = s.date,
+                        createdBy = payers.keys.first(),
+                        payers = payers,
+                        strategy = draft.buildStrategy(),
+                    ),
+                )
+            }
             reset()
             onDone()
         }
+    }
+
+    /**
+     * Recover the editable form state (mode + per-person inputs + participants) from a
+     * stored [SplitStrategy]. Adjustment has no editor of its own, so it round-trips
+     * through the already-computed owed shares as an exact split — numerically faithful.
+     */
+    private fun reverseSplit(expense: Expense): Triple<AddExpenseDraft.SplitMode, Map<PersonId, String>, List<PersonId>> =
+        when (val s = expense.splitStrategy) {
+            is SplitStrategy.Equal ->
+                Triple(AddExpenseDraft.SplitMode.Equal, emptyMap(), s.participants)
+            is SplitStrategy.Exact ->
+                Triple(AddExpenseDraft.SplitMode.Unequally, s.amounts.mapValues { it.value.toInput() }, s.amounts.keys.toList())
+            is SplitStrategy.Percent ->
+                Triple(AddExpenseDraft.SplitMode.Percent, s.basisPoints.mapValues { AddExpenseDraft.formatPercent(it.value) }, s.basisPoints.keys.toList())
+            is SplitStrategy.Shares ->
+                Triple(AddExpenseDraft.SplitMode.Shares, s.shares.mapValues { it.value.toString() }, s.shares.keys.toList())
+            is SplitStrategy.Adjustment -> {
+                val owed = expense.shares.filter { it.owedShare.isPositive }
+                Triple(
+                    AddExpenseDraft.SplitMode.Unequally,
+                    owed.associate { it.personId to it.owedShare.toInput() },
+                    owed.map { it.personId },
+                )
+            }
+        }
+
+    /** Money as a plain editable number (no symbol): 1250 paise → "12.50", ¥1250 → "1250". */
+    private fun Money.toInput(): String {
+        if (currency.decimals == 0) return minorUnits.toString()
+        val major = minorUnits / currency.scale
+        val minor = (minorUnits % currency.scale).toString().padStart(currency.decimals, '0')
+        return "$major.$minor"
     }
 }

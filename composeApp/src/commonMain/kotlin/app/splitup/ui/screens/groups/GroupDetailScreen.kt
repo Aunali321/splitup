@@ -40,6 +40,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -119,11 +122,13 @@ fun GroupDetailScreen(
     onAddExpense: () -> Unit,
     onSettleUp: () -> Unit,
     onOpenExpense: (ExpenseId) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val vm: GroupDetailViewModel = koinViewModel(parameters = { parametersOf(GroupId(groupId)) })
     val state by vm.state.collectAsStateWithLifecycle()
     val group = state.group
     val me = state.me
+    var showBalances by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -135,7 +140,7 @@ fun GroupDetailScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* TODO group settings */ }) {
+                    IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Outlined.Settings, contentDescription = "Settings")
                     }
                 },
@@ -158,7 +163,14 @@ fun GroupDetailScreen(
                     group = group,
                     myNet = state.myNetByCurrency,
                     onSettleUp = onSettleUp,
+                    balancesShown = showBalances,
+                    onToggleBalances = { showBalances = !showBalances },
                 )
+            }
+            if (showBalances) {
+                item(key = "balances") {
+                    BalancesBreakdown(debts = state.debts, me = me, nameById = state.nameById)
+                }
             }
             val groupedByMonth = state.expenses
                 .filter { !it.isDeleted }
@@ -184,7 +196,13 @@ fun GroupDetailScreen(
 }
 
 @Composable
-private fun GroupHero(group: Group, myNet: Map<Currency, Money>, onSettleUp: () -> Unit) {
+private fun GroupHero(
+    group: Group,
+    myNet: Map<Currency, Money>,
+    onSettleUp: () -> Unit,
+    balancesShown: Boolean,
+    onToggleBalances: () -> Unit,
+) {
     val tint = groupTint(group.name)
     Column(
         modifier = Modifier
@@ -259,9 +277,42 @@ private fun GroupHero(group: Group, myNet: Map<Currency, Money>, onSettleUp: () 
                 Text("Settle up")
             }
             FilledTonalButton(
-                onClick = { /* TODO balances detail */ },
+                onClick = onToggleBalances,
                 modifier = Modifier.weight(1f),
-            ) { Text("Balances") }
+            ) { Text(if (balancesShown) "Hide balances" else "Balances") }
+        }
+    }
+}
+
+@Composable
+private fun BalancesBreakdown(debts: List<Debt>, me: PersonId, nameById: Map<PersonId, String>) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        if (debts.isEmpty()) {
+            Text(
+                "Everyone is settled up.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            debts.forEach { debt ->
+                val fromName = if (debt.from == me) "You" else nameById[debt.from] ?: "Someone"
+                val toName = if (debt.to == me) "you" else nameById[debt.to] ?: "someone"
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "$fromName ${if (debt.from == me) "owe" else "owes"} $toName",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        debt.amount.format(),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
         }
     }
 }

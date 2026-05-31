@@ -26,12 +26,14 @@ sealed interface Route {
     @Serializable data class ExpenseDetail(val expenseId: String) : Route
 
     // Modal flows
-    @Serializable data class AddExpense(val groupId: String? = null, val friendId: String? = null) : Route
-    @Serializable data class PaidByPicker(val groupId: String? = null, val friendId: String? = null) : Route
-    @Serializable data class SplitPicker(val groupId: String? = null, val friendId: String? = null) : Route
+    @Serializable data class AddExpense(val groupId: String? = null, val friendId: String? = null, val expenseId: String? = null) : Route
+    @Serializable data class PaidByPicker(val groupId: String? = null, val friendId: String? = null, val expenseId: String? = null) : Route
+    @Serializable data class SplitPicker(val groupId: String? = null, val friendId: String? = null, val expenseId: String? = null) : Route
     @Serializable data class SettleUp(val groupId: String? = null, val friendId: String? = null) : Route
     @Serializable data object SplitwiseImport : Route
     @Serializable data object Settings : Route
+    @Serializable data object EditProfile : Route
+    @Serializable data class GroupSettings(val groupId: String) : Route
 }
 
 enum class BottomTab(val route: Route, val label: String) {

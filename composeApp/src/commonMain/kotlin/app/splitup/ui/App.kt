@@ -37,6 +37,7 @@ import app.splitup.ui.navigation.BottomTab
 import app.splitup.ui.navigation.Motion
 import app.splitup.ui.navigation.Route
 import app.splitup.ui.screens.account.AccountScreen
+import app.splitup.ui.screens.account.EditProfileScreen
 import app.splitup.ui.screens.activity.ActivityScreen
 import app.splitup.ui.screens.addexpense.AddExpenseScreen
 import app.splitup.ui.screens.addexpense.PaidByPickerScreen
@@ -45,6 +46,7 @@ import app.splitup.ui.screens.expense.ExpenseDetailScreen
 import app.splitup.ui.screens.friends.FriendDetailScreen
 import app.splitup.ui.screens.friends.FriendsScreen
 import app.splitup.ui.screens.groups.GroupDetailScreen
+import app.splitup.ui.screens.groups.GroupSettingsScreen
 import app.splitup.ui.screens.groups.GroupsScreen
 import app.splitup.ui.screens.importer.SplitwiseImportScreen
 import app.splitup.ui.screens.onboarding.OnboardingCurrencyScreen
@@ -174,6 +176,7 @@ private fun MainNav() {
                     AccountScreen(
                         onOpenSettings = { nav.navigate(Route.Settings) },
                         onOpenImport = { nav.navigate(Route.SplitwiseImport) },
+                        onOpenEditProfile = { nav.navigate(Route.EditProfile) },
                     )
                 }
 
@@ -185,6 +188,7 @@ private fun MainNav() {
                         onAddExpense = { nav.navigate(Route.AddExpense(groupId = args.groupId)) },
                         onSettleUp = { nav.navigate(Route.SettleUp(groupId = args.groupId)) },
                         onOpenExpense = { nav.navigate(Route.ExpenseDetail(it.value)) },
+                        onOpenSettings = { nav.navigate(Route.GroupSettings(args.groupId)) },
                     )
                 }
                 composable<Route.FriendDetail> { entry ->
@@ -199,7 +203,11 @@ private fun MainNav() {
                 }
                 composable<Route.ExpenseDetail> { entry ->
                     val args = entry.toRoute<Route.ExpenseDetail>()
-                    ExpenseDetailScreen(expenseId = args.expenseId, onBack = { nav.popBackStack() })
+                    ExpenseDetailScreen(
+                        expenseId = args.expenseId,
+                        onBack = { nav.popBackStack() },
+                        onEdit = { nav.navigate(Route.AddExpense(expenseId = args.expenseId)) },
+                    )
                 }
 
                 composable<Route.AddExpense>(
@@ -212,9 +220,10 @@ private fun MainNav() {
                     AddExpenseScreen(
                         groupId = args.groupId,
                         friendId = args.friendId,
+                        expenseId = args.expenseId,
                         onDone = { nav.popBackStack() },
-                        onOpenPaidBy = { nav.navigate(Route.PaidByPicker(args.groupId, args.friendId)) },
-                        onOpenSplit = { nav.navigate(Route.SplitPicker(args.groupId, args.friendId)) },
+                        onOpenPaidBy = { nav.navigate(Route.PaidByPicker(args.groupId, args.friendId, args.expenseId)) },
+                        onOpenSplit = { nav.navigate(Route.SplitPicker(args.groupId, args.friendId, args.expenseId)) },
                     )
                 }
                 composable<Route.PaidByPicker> { entry ->
@@ -222,6 +231,7 @@ private fun MainNav() {
                     PaidByPickerScreen(
                         groupId = args.groupId,
                         friendId = args.friendId,
+                        expenseId = args.expenseId,
                         onBack = { nav.popBackStack() },
                     )
                 }
@@ -230,6 +240,7 @@ private fun MainNav() {
                     SplitPickerScreen(
                         groupId = args.groupId,
                         friendId = args.friendId,
+                        expenseId = args.expenseId,
                         onBack = { nav.popBackStack() },
                     )
                 }
@@ -254,6 +265,19 @@ private fun MainNav() {
                 ) { SplitwiseImportScreen(onDone = { nav.popBackStack() }) }
 
                 composable<Route.Settings> { SettingsScreen(onBack = { nav.popBackStack() }) }
+
+                composable<Route.EditProfile> { EditProfileScreen(onBack = { nav.popBackStack() }) }
+
+                composable<Route.GroupSettings> { entry ->
+                    val args = entry.toRoute<Route.GroupSettings>()
+                    GroupSettingsScreen(
+                        groupId = args.groupId,
+                        onBack = { nav.popBackStack() },
+                        // After deleting, the GroupDetail behind us points at a now-missing
+                        // group; pop straight back to the Groups list instead.
+                        onDeleted = { nav.popBackStack<Route.Groups>(inclusive = false) },
+                    )
+                }
             }
         }
     }

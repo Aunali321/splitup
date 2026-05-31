@@ -1,18 +1,26 @@
 package app.splitup.ui.screens.account
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -21,10 +29,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -36,7 +46,6 @@ import app.splitup.shared.domain.repository.PersonRepository
 import app.splitup.ui.components.PersonAvatar
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.stateIn
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -50,37 +59,120 @@ class AccountViewModel(people: PersonRepository) : ViewModel() {
 fun AccountScreen(
     onOpenSettings: () -> Unit,
     onOpenImport: () -> Unit,
+    onOpenEditProfile: () -> Unit,
 ) {
     val vm: AccountViewModel = koinViewModel()
     val me by vm.me.collectAsStateWithLifecycle()
-    Scaffold(topBar = { TopAppBar(title = { Text("Account", fontWeight = FontWeight.SemiBold) }) }) { padding ->
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Account", fontWeight = FontWeight.SemiBold) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
+            )
+        },
+    ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
-            me?.let {
-                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    PersonAvatar(it, size = 64.dp)
+            me?.let { person ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onOpenEditProfile)
+                        .padding(20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    PersonAvatar(person, size = 64.dp)
                     Spacer(Modifier.width(16.dp))
-                    Column {
-                        Text(it.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                        it.email?.let { e -> Text(e, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(person.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                        person.email?.let { e ->
+                            Text(e, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } ?: Text(
+                            "Tap to edit",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
                     }
+                    Icon(
+                        Icons.Outlined.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
-                HorizontalDivider()
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
             }
-            AccountRow(icon = Icons.Outlined.CloudDownload, label = "Import from Splitwise", onClick = onOpenImport)
-            AccountRow(icon = Icons.Outlined.Settings, label = "Settings", onClick = onOpenSettings)
+
+            SectionHeader("Data")
+            AccountRow(
+                icon = Icons.Outlined.CloudDownload,
+                title = "Import from Splitwise",
+                subtitle = "One-time pull of your Splitwise account",
+                onClick = onOpenImport,
+            )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            SectionHeader("App")
+            AccountRow(
+                icon = Icons.Outlined.Settings,
+                title = "Settings",
+                subtitle = "Currency, theme, dynamic colour",
+                onClick = onOpenSettings,
+            )
+            AccountRow(
+                icon = Icons.Outlined.Info,
+                title = "About SplitUp!",
+                subtitle = "Open source · v0.1.0",
+                onClick = {},
+            )
+            AccountRow(
+                icon = Icons.Outlined.OpenInNew,
+                title = "Source code",
+                subtitle = "github.com/Aunali321/splitup",
+                onClick = {},
+            )
+            Spacer(Modifier.padding(bottom = 24.dp))
         }
     }
 }
 
 @Composable
-private fun AccountRow(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun SectionHeader(text: String) {
+    Text(
+        text,
+        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, top = 16.dp, bottom = 4.dp),
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.SemiBold,
+    )
+}
+
+@Composable
+private fun AccountRow(icon: ImageVector, title: String, subtitle: String? = null, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
+        }
         Spacer(Modifier.width(16.dp))
-        Text(label, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-        Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        Icon(
+            Icons.Outlined.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

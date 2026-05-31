@@ -20,18 +20,23 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CurrencyExchange
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +54,11 @@ import app.splitup.shared.domain.model.Currency
 import app.splitup.shared.domain.model.GroupId
 import app.splitup.shared.domain.model.PersonId
 import app.splitup.ui.components.CurrencyPicker
+import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.toLocalDateTime
 import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,19 +66,22 @@ import org.koin.compose.koinInject
 fun AddExpenseScreen(
     groupId: String?,
     friendId: String?,
+    expenseId: String? = null,
     onDone: () -> Unit,
     onOpenPaidBy: () -> Unit,
     onOpenSplit: () -> Unit,
 ) {
     val vm: AddExpenseViewModel = koinInject()
-    androidx.compose.runtime.LaunchedEffect(groupId, friendId) {
-        vm.start(groupId?.let { GroupId(it) }, friendId?.let { PersonId(it) })
+    androidx.compose.runtime.LaunchedEffect(groupId, friendId, expenseId) {
+        vm.start(groupId?.let { GroupId(it) }, friendId?.let { PersonId(it) }, expenseId)
     }
+    val editing by vm.editing.collectAsStateWithLifecycle()
     val scope by vm.scope.collectAsStateWithLifecycle()
     val draftReady by vm.draftReady.collectAsStateWithLifecycle()
     if (!draftReady) return
     val draftState by vm.draft.state.collectAsStateWithLifecycle()
     var showCurrencyPicker by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
 
     if (showCurrencyPicker) {
         CurrencyPicker(
@@ -77,15 +90,38 @@ fun AddExpenseScreen(
         )
     }
 
+    if (showDatePicker) {
+        // DatePicker works in UTC day-millis; convert both ways in UTC to avoid
+        // an off-by-one when the device is behind/ahead of UTC.
+        val zone = TimeZone.UTC
+        val dateState = rememberDatePickerState(
+            initialSelectedDateMillis = draftState.date.atStartOfDayIn(zone).toEpochMilliseconds(),
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    dateState.selectedDateMillis?.let { millis ->
+                        vm.draft.setDate(Instant.fromEpochMilliseconds(millis).toLocalDateTime(zone).date)
+                    }
+                    showDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } },
+        ) { DatePicker(state = dateState) }
+    }
+
     val canSave = draftState.description.isNotBlank() &&
         draftState.amount.isNotBlank() &&
         draftState.payers.isNotEmpty() &&
-        draftState.participants.isNotEmpty()
+        draftState.participants.isNotEmpty() &&
+        vm.draft.splitError() == null &&
+        vm.draft.payerError() == null
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Add expense", fontWeight = FontWeight.SemiBold) },
+                title = { Text(if (editing != null) "Edit expense" else "Add expense", fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
                     IconButton(onClick = onDone) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Cancel")
@@ -175,6 +211,25 @@ fun AddExpenseScreen(
                 AssistChip(
                     onClick = onOpenSplit,
                     label = { Text(draftState.strategy.label) },
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "On ",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                AssistChip(
+                    onClick = { showDatePicker = true },
+                    label = { Text(formatExpenseDate(draftState.date)) },
+                    leadingIcon = {
+                        Icon(Icons.Outlined.Event, contentDescription = null, modifier = Modifier.size(18.dp))
+                    },
                 )
             }
 
@@ -285,6 +340,14 @@ private fun transparentFieldColors() = TextFieldDefaults.colors(
 )
 
 private fun decimalSep(currency: Currency): String = if (currency.decimals == 0) "" else "."
+
+private fun formatExpenseDate(date: LocalDate): String {
+    val month = when (date.monthNumber) {
+        1 -> "Jan"; 2 -> "Feb"; 3 -> "Mar"; 4 -> "Apr"; 5 -> "May"; 6 -> "Jun"
+        7 -> "Jul"; 8 -> "Aug"; 9 -> "Sep"; 10 -> "Oct"; 11 -> "Nov"; else -> "Dec"
+    }
+    return "${date.dayOfMonth} $month ${date.year}"
+}
 
 private val AddExpenseDraft.SplitMode.label: String
     get() = when (this) {
