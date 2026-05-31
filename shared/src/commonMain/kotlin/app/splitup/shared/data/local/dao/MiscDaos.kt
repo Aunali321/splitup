@@ -2,6 +2,7 @@ package app.splitup.shared.data.local.dao
 
 import androidx.room.Dao
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Upsert
 import app.splitup.shared.data.local.entity.CategoryEntity
 import app.splitup.shared.data.local.entity.CommentEntity
@@ -61,6 +62,35 @@ interface ExchangeRateDao {
     suspend fun nearest(from: String, to: String, date: LocalDate): ExchangeRateEntity?
 
     @Upsert suspend fun upsertAll(rates: List<ExchangeRateEntity>)
+}
+
+@Dao
+interface MaintenanceDao {
+    @Query("DELETE FROM expense_share") suspend fun clearExpenseShares()
+    @Query("DELETE FROM expense") suspend fun clearExpenses()
+    @Query("DELETE FROM settlement") suspend fun clearSettlements()
+    @Query("DELETE FROM comment") suspend fun clearComments()
+    @Query("DELETE FROM group_member") suspend fun clearGroupMembers()
+    @Query("DELETE FROM group_") suspend fun clearGroups()
+    @Query("DELETE FROM person") suspend fun clearPeople()
+    @Query("DELETE FROM category") suspend fun clearCategories()
+    @Query("DELETE FROM exchange_rate") suspend fun clearExchangeRates()
+    @Query("DELETE FROM user_preferences") suspend fun clearPreferences()
+
+    /** Wipes every row. Children are cleared before parents so foreign keys never block. */
+    @Transaction
+    suspend fun clearAll() {
+        clearExpenseShares()
+        clearExpenses()
+        clearSettlements()
+        clearComments()
+        clearGroupMembers()
+        clearGroups()
+        clearPeople()
+        clearCategories()
+        clearExchangeRates()
+        clearPreferences()
+    }
 }
 
 @Dao

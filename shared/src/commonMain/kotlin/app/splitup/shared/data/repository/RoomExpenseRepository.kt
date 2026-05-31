@@ -28,6 +28,9 @@ class RoomExpenseRepository(
     override fun observeRecent(limit: Int): Flow<List<Expense>> =
         dao.observeRecent(limit).map { hydrate(it) }
 
+    override fun observe(id: ExpenseId): Flow<Expense?> =
+        dao.observeById(id.value).map { e -> e?.toDomain(dao.getShares(e.id)) }
+
     override suspend fun get(id: ExpenseId): Expense? {
         val e = dao.get(id.value) ?: return null
         return e.toDomain(dao.getShares(e.id))

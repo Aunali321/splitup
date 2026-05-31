@@ -8,6 +8,8 @@ import app.splitup.shared.data.repository.RoomExpenseRepository
 import app.splitup.shared.data.repository.RoomGroupRepository
 import app.splitup.shared.data.repository.RoomPersonRepository
 import app.splitup.shared.data.repository.RoomSettlementRepository
+import app.splitup.shared.data.repository.LocalDataReset
+import app.splitup.shared.data.repository.RoomLocalDataReset
 import app.splitup.shared.data.repository.RoomUserPreferencesRepository
 import app.splitup.shared.data.repository.UserPreferencesRepository
 import app.splitup.shared.domain.repository.CommentRepository
@@ -16,6 +18,7 @@ import app.splitup.shared.domain.repository.GroupRepository
 import app.splitup.shared.domain.repository.PersonRepository
 import app.splitup.shared.domain.repository.SettlementRepository
 import app.splitup.shared.domain.usecase.AddExpenseUseCase
+import app.splitup.shared.domain.usecase.EditExpenseUseCase
 import app.splitup.shared.domain.usecase.SettleUpUseCase
 import app.splitup.shared.splitwise.SplitwiseImporter
 import app.splitup.shared.splitwise.SplitwiseOAuth
@@ -41,6 +44,7 @@ val databaseModule: Module = module {
     single { get<SplitUpDatabase>().categoryDao() }
     single { get<SplitUpDatabase>().exchangeRateDao() }
     single { get<SplitUpDatabase>().userPreferencesDao() }
+    single { get<SplitUpDatabase>().maintenanceDao() }
 }
 
 val repositoryModule: Module = module {
@@ -50,10 +54,12 @@ val repositoryModule: Module = module {
     single<SettlementRepository> { RoomSettlementRepository(get(), get()) }
     single<CommentRepository> { RoomCommentRepository(get(), get()) }
     single<UserPreferencesRepository> { RoomUserPreferencesRepository(get()) }
+    single<LocalDataReset> { RoomLocalDataReset(get()) }
 }
 
 val useCaseModule: Module = module {
     factory { AddExpenseUseCase(get(), get(), { get<IdGenerator>().next() }) }
+    factory { EditExpenseUseCase(get(), get()) }
     factory { SettleUpUseCase(get(), get(), idGenerator = { get<IdGenerator>().next() }) }
 }
 

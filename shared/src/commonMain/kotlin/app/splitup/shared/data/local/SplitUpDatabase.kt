@@ -10,6 +10,7 @@ import app.splitup.shared.data.local.dao.CommentDao
 import app.splitup.shared.data.local.dao.ExchangeRateDao
 import app.splitup.shared.data.local.dao.ExpenseDao
 import app.splitup.shared.data.local.dao.GroupDao
+import app.splitup.shared.data.local.dao.MaintenanceDao
 import app.splitup.shared.data.local.dao.PersonDao
 import app.splitup.shared.data.local.dao.SettlementDao
 import app.splitup.shared.data.local.dao.UserPreferencesDao
@@ -51,6 +52,7 @@ abstract class SplitUpDatabase : RoomDatabase() {
     abstract fun categoryDao(): CategoryDao
     abstract fun exchangeRateDao(): ExchangeRateDao
     abstract fun userPreferencesDao(): UserPreferencesDao
+    abstract fun maintenanceDao(): MaintenanceDao
 }
 
 /**

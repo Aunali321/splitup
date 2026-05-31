@@ -1,6 +1,7 @@
 package app.splitup.shared.data.repository
 
 import app.splitup.shared.data.local.dao.CommentDao
+import app.splitup.shared.data.local.dao.MaintenanceDao
 import app.splitup.shared.data.local.dao.SettlementDao
 import app.splitup.shared.data.local.dao.UserPreferencesDao
 import app.splitup.shared.data.mapper.toDomain
@@ -65,4 +66,15 @@ class RoomUserPreferencesRepository(
 
     override suspend fun save(preferences: UserPreferences) =
         dao.upsert(preferences.toEntity())
+}
+
+/** Wipes every table in the local database. Backs Settings → "Erase all data". */
+interface LocalDataReset {
+    suspend fun clearAll()
+}
+
+class RoomLocalDataReset(
+    private val dao: MaintenanceDao,
+) : LocalDataReset {
+    override suspend fun clearAll() = dao.clearAll()
 }

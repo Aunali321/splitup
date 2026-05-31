@@ -38,6 +38,9 @@ interface ExpenseDao {
     @Query("SELECT * FROM expense WHERE id = :id LIMIT 1")
     suspend fun get(id: String): ExpenseEntity?
 
+    @Query("SELECT * FROM expense WHERE id = :id LIMIT 1")
+    fun observeById(id: String): Flow<ExpenseEntity?>
+
     @Query("SELECT * FROM expense_share WHERE expense_id = :expenseId")
     suspend fun getShares(expenseId: String): List<ExpenseShareEntity>
 

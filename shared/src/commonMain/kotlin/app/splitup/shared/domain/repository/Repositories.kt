@@ -37,6 +37,7 @@ interface ExpenseRepository {
     fun observeInGroup(groupId: GroupId): Flow<List<Expense>>
     fun observeWithFriend(friendId: PersonId): Flow<List<Expense>>
     fun observeRecent(limit: Int = 50): Flow<List<Expense>>
+    fun observe(id: ExpenseId): Flow<Expense?>
     suspend fun get(id: ExpenseId): Expense?
     suspend fun save(expense: Expense)
     suspend fun saveAll(expenses: List<Expense>)
