@@ -72,7 +72,17 @@ class AddExpenseDraft(
             } else updated
         }
     }
-    fun setCurrency(c: Currency) = _state.update { it.copy(currency = c) }
+    fun setCurrency(c: Currency) = _state.update { s ->
+        // payers store Money, so re-denominate them in the new currency — otherwise
+        // payerError()'s Money math would compare mismatched currencies and throw.
+        val payers = if (s.multiplePayers) {
+            parsePayers(s.payerInputs, c)
+        } else {
+            val total = runCatching { Money.parse(s.amount, c) }.getOrDefault(Money.zero(c))
+            s.payers.keys.firstOrNull()?.let { mapOf(it to total) }.orEmpty()
+        }
+        s.copy(currency = c, payers = payers)
+    }
     fun setDate(d: LocalDate) = _state.update { it.copy(date = d) }
     fun setSinglePayer(person: PersonId) {
         _state.update { s ->
