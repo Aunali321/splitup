@@ -85,7 +85,9 @@ class AddExpenseDraft(
     fun setMultiplePayers(enabled: Boolean) = _state.update { s ->
         if (s.multiplePayers == enabled) s
         else if (enabled) {
-            s.copy(multiplePayers = true)
+            // Seed the per-payer fields from the current single payer so the inputs match
+            // the amount already shown in the footer (Splitwise pre-fills the payer too).
+            s.copy(multiplePayers = true, payerInputs = s.payers.mapValues { it.value.toPlainString() })
         } else {
             // Collapse back to a single payer: keep whoever's first, covering the full total.
             val total = runCatching { Money.parse(s.amount, s.currency) }.getOrDefault(Money.zero(s.currency))

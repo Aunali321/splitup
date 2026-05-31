@@ -131,6 +131,16 @@ data class Money(
         return "$sign${currency.symbol}$major.$padded"
     }
 
+    /** The amount as a plain editable number, no currency symbol: 1250 paise → "12.50", ¥1250 → "1250". */
+    fun toPlainString(): String {
+        val sign = if (minorUnits < 0) "-" else ""
+        val mag = if (minorUnits < 0) -minorUnits else minorUnits
+        if (currency.decimals == 0) return "$sign$mag"
+        val major = mag / currency.scale
+        val minor = (mag % currency.scale).toString().padStart(currency.decimals, '0')
+        return "$sign$major.$minor"
+    }
+
     companion object {
         fun zero(currency: Currency): Money = Money(0L, currency)
         fun ofMinor(minorUnits: Long, currency: Currency): Money = Money(minorUnits, currency)

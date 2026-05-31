@@ -155,7 +155,7 @@ class AddExpenseViewModel(
         draftBacking.set(
             AddExpenseDraft.State(
                 description = expense.description,
-                amount = expense.cost.toInput(),
+                amount = expense.cost.toPlainString(),
                 currency = expense.cost.currency,
                 date = expense.date,
                 participants = participants,
@@ -163,7 +163,7 @@ class AddExpenseViewModel(
                 strategy = mode,
                 splitInputs = splitInputs,
                 multiplePayers = payers.size > 1,
-                payerInputs = if (payers.size > 1) payers.mapValues { it.value.toInput() } else emptyMap(),
+                payerInputs = if (payers.size > 1) payers.mapValues { it.value.toPlainString() } else emptyMap(),
             ),
         )
         _draftReady.value = true
@@ -241,7 +241,7 @@ class AddExpenseViewModel(
             is SplitStrategy.Equal ->
                 Triple(AddExpenseDraft.SplitMode.Equal, emptyMap(), s.participants)
             is SplitStrategy.Exact ->
-                Triple(AddExpenseDraft.SplitMode.Unequally, s.amounts.mapValues { it.value.toInput() }, s.amounts.keys.toList())
+                Triple(AddExpenseDraft.SplitMode.Unequally, s.amounts.mapValues { it.value.toPlainString() }, s.amounts.keys.toList())
             is SplitStrategy.Percent ->
                 Triple(AddExpenseDraft.SplitMode.Percent, s.basisPoints.mapValues { AddExpenseDraft.formatPercent(it.value) }, s.basisPoints.keys.toList())
             is SplitStrategy.Shares ->
@@ -250,17 +250,10 @@ class AddExpenseViewModel(
                 val owed = expense.shares.filter { it.owedShare.isPositive }
                 Triple(
                     AddExpenseDraft.SplitMode.Unequally,
-                    owed.associate { it.personId to it.owedShare.toInput() },
+                    owed.associate { it.personId to it.owedShare.toPlainString() },
                     owed.map { it.personId },
                 )
             }
         }
 
-    /** Money as a plain editable number (no symbol): 1250 paise → "12.50", ¥1250 → "1250". */
-    private fun Money.toInput(): String {
-        if (currency.decimals == 0) return minorUnits.toString()
-        val major = minorUnits / currency.scale
-        val minor = (minorUnits % currency.scale).toString().padStart(currency.decimals, '0')
-        return "$major.$minor"
-    }
 }
