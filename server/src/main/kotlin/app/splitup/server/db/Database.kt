@@ -3,7 +3,8 @@ package app.splitup.server.db
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import org.flywaydb.core.Flyway
-import org.jetbrains.exposed.sql.Database as ExposedDb
+import org.jetbrains.exposed.v1.core.DatabaseConfig
+import org.jetbrains.exposed.v1.jdbc.Database as ExposedDb
 import javax.sql.DataSource
 
 class Database private constructor(
@@ -30,7 +31,12 @@ class Database private constructor(
                 addDataSourceProperty("prepStmtCacheSize", "250")
             }
             val ds = HikariDataSource(hikari)
-            val exposed = ExposedDb.connect(ds)
+            // Nested transactions become savepoints, which /sync/write relies on to
+            // reject a single op without aborting the whole batch's transaction.
+            val exposed = ExposedDb.connect(
+                datasource = ds,
+                databaseConfig = DatabaseConfig { useNestedTransactions = true },
+            )
             return Database(ds, exposed)
         }
     }

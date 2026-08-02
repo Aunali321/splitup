@@ -39,9 +39,6 @@ COPY --from=build /src/server/build/install/server /app
 
 EXPOSE 8080
 
-ENV PORT=8080 \
-    DATABASE_URL=jdbc:postgresql://postgres:5432/splitup \
-    DATABASE_USER=splitup \
-    DATABASE_PASSWORD=splitup
+ENV PORT=8080
 
 ENTRYPOINT ["/app/bin/server"]

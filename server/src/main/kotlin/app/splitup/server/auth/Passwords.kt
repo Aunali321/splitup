@@ -15,8 +15,15 @@ object Passwords {
     private const val MEMORY_KIB = 65_536
     private const val PARALLELISM = 2
 
-    fun hash(plain: CharArray): String =
+    fun hash(plain: CharArray): String = try {
         argon2.hash(ITERATIONS, MEMORY_KIB, PARALLELISM, plain)
+    } finally {
+        argon2.wipeArray(plain)
+    }
 
-    fun verify(hash: String, plain: CharArray): Boolean = argon2.verify(hash, plain)
+    fun verify(hash: String, plain: CharArray): Boolean = try {
+        argon2.verify(hash, plain)
+    } finally {
+        argon2.wipeArray(plain)
+    }
 }

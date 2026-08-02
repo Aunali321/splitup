@@ -14,7 +14,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: splitup
-      POSTGRES_PASSWORD: splitup
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run 'openssl rand -base64 24' and put in .env}
       POSTGRES_DB: splitup
     # wal_level=logical is the bare-minimum for PowerSync's CDC even on the
     # default profile, so users opting into sync later don't have to recreate
@@ -29,8 +29,9 @@ services:
       - max_replication_slots=10
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    # Loopback only — the database is never published to the network.
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U splitup -d splitup"]
       interval: 5s
@@ -49,7 +50,7 @@ services:
       PORT: 8080
       DATABASE_URL: jdbc:postgresql://postgres:5432/splitup
       DATABASE_USER: splitup
-      DATABASE_PASSWORD: splitup
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?run 'openssl rand -base64 24' and put in .env}
       # 32 raw bytes, encoded as base64url (URL-safe, unpadded).
       # Same value is consumed by PowerSync as the HS256 JWK below.
       SPLITUP_SESSION_SECRET: ${SPLITUP_SESSION_SECRET:?run 'openssl rand -base64 32 | tr +/ -_ | tr -d =' and put in .env}
@@ -86,7 +87,7 @@ services:
     environment:
       POWERSYNC_CONFIG_PATH: /config/service.yaml
       NODE_OPTIONS: --max-old-space-size=1000
-      PS_DATA_SOURCE_URI: postgres://splitup:splitup@postgres:5432/splitup
+      PS_DATA_SOURCE_URI: postgres://splitup:${POSTGRES_PASSWORD:?run 'openssl rand -base64 24' and put in .env}@postgres:5432/splitup
       PS_STORAGE_SOURCE_URI: postgres://powersync:powersync@pg-storage:5432/powersync
       PS_PORT: 8080
       PS_JWT_SECRET_B64URL: ${SPLITUP_SESSION_SECRET:?run 'openssl rand -base64 32 | tr +/ -_ | tr -d =' and put in .env}

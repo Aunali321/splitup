@@ -1,27 +1,41 @@
 # yaml-language-server: $schema=https://unpkg.com/@powersync/service-sync-rules@latest/schema/sync_rules.json
+#
+# Access is by membership, not ownership: you sync a group's content iff your
+# person is a member of it, and a non-group expense iff you have a share in it.
 
 config:
   edition: 3
 
 streams:
-  by_account:
+  # Your own person row, which exists before you join anything.
+  self:
     auto_subscribe: true
-    queries:
-      - SELECT * FROM person          WHERE account_id = auth.user_id()
-      - SELECT * FROM group_          WHERE account_id = auth.user_id()
-      - SELECT gm.* FROM group_member gm
-          JOIN group_ g ON g.id = gm.group_id
-          WHERE g.account_id = auth.user_id()
-      - SELECT * FROM expense         WHERE account_id = auth.user_id()
-      - SELECT es.* FROM expense_share es
-          JOIN expense e ON e.id = es.expense_id
-          WHERE e.account_id = auth.user_id()
-      - SELECT * FROM settlement      WHERE account_id = auth.user_id()
-      - SELECT * FROM comment         WHERE account_id = auth.user_id()
-      - SELECT * FROM user_preferences WHERE account_id = auth.user_id()
+    query: SELECT * FROM person WHERE account_id = auth.user_id()
 
-  reference:
+  groups:
     auto_subscribe: true
+    with:
+      me: SELECT id FROM person WHERE account_id = auth.user_id()
+      my_groups: SELECT group_id FROM group_member WHERE person_id IN (SELECT id FROM me)
+      my_expenses: SELECT id FROM expense WHERE group_id IN (SELECT group_id FROM my_groups)
     queries:
-      - SELECT * FROM category
-      - SELECT * FROM exchange_rate
+      - SELECT * FROM group_ WHERE id IN (SELECT group_id FROM my_groups)
+      - SELECT * FROM group_member WHERE group_id IN (SELECT group_id FROM my_groups)
+      - SELECT * FROM person WHERE id IN
+          (SELECT person_id FROM group_member WHERE group_id IN (SELECT group_id FROM my_groups))
+      - SELECT * FROM expense WHERE id IN (SELECT id FROM my_expenses)
+      - SELECT * FROM expense_share WHERE expense_id IN (SELECT id FROM my_expenses)
+      - SELECT * FROM comment WHERE expense_id IN (SELECT id FROM my_expenses)
+
+  # Friend-to-friend expenses, which belong to no group.
+  direct:
+    auto_subscribe: true
+    with:
+      me: SELECT id FROM person WHERE account_id = auth.user_id()
+      my_expenses: SELECT expense_id AS id FROM expense_share WHERE person_id IN (SELECT id FROM me)
+    queries:
+      - SELECT * FROM expense WHERE group_id IS NULL AND id IN (SELECT id FROM my_expenses)
+      - SELECT * FROM expense_share WHERE expense_id IN (SELECT id FROM my_expenses)
+      - SELECT * FROM comment WHERE expense_id IN (SELECT id FROM my_expenses)
+      - SELECT * FROM person WHERE id IN
+          (SELECT person_id FROM expense_share WHERE expense_id IN (SELECT id FROM my_expenses))

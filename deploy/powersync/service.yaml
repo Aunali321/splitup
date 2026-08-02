@@ -26,14 +26,15 @@ sync_config:
 client_auth:
   # Static symmetric JWK. Tokens are minted by the splitup server using the same
   # secret; both services read it from the host environment so we never put it
-  # in source.
+  # in source. Only short-lived sync tokens carry this audience — the server's
+  # 60-day session tokens use audience "splitup" and are rejected here.
   jwks:
     keys:
       - kty: oct
         kid: splitup-session
         alg: HS256
         k: !env PS_JWT_SECRET_B64URL
-  audience: ["splitup"]
+  audience: ["powersync"]
 
 api:
   tokens:
