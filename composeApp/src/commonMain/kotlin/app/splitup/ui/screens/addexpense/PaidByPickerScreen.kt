@@ -18,7 +18,6 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -27,7 +26,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,24 +33,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.splitup.shared.domain.model.GroupId
 import app.splitup.shared.domain.model.Money
-import app.splitup.shared.domain.model.PersonId
+import app.splitup.ui.components.ListDivider
 import app.splitup.ui.components.PersonAvatar
-import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PaidByPickerScreen(
-    groupId: String?,
-    friendId: String?,
-    expenseId: String? = null,
+    vm: AddExpenseViewModel,
     onBack: () -> Unit,
 ) {
-    val vm: AddExpenseViewModel = koinInject()
-    LaunchedEffect(groupId, friendId, expenseId) {
-        vm.start(groupId?.let { GroupId(it) }, friendId?.let { PersonId(it) }, expenseId)
-    }
     val scope by vm.scope.collectAsStateWithLifecycle()
     val draftReady by vm.draftReady.collectAsStateWithLifecycle()
     if (!draftReady) return
@@ -93,7 +83,7 @@ fun PaidByPickerScreen(
                     label = { Text("Multiple people") },
                 )
             }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+            ListDivider()
 
             Box(Modifier.weight(1f)) {
                 LazyColumn(Modifier.fillMaxSize()) {
@@ -127,7 +117,7 @@ fun PaidByPickerScreen(
                                 }
                             }
                         }
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                        ListDivider()
                     }
                 }
             }

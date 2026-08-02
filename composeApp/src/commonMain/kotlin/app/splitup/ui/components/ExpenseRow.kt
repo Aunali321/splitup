@@ -11,11 +11,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Receipt
-import androidx.compose.material.icons.rounded.Handshake
+import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -23,13 +21,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.splitup.shared.domain.model.Expense
 import app.splitup.shared.domain.model.Money
 import app.splitup.shared.domain.model.PersonId
+import app.splitup.ui.util.monthAbbr
 import kotlinx.datetime.LocalDate
 
 @Composable
@@ -40,12 +38,15 @@ fun ExpenseRow(
     onClick: () -> Unit,
 ) {
     if (expense.isPayment) {
-        SettlementRow(expense, me, nameById, onClick)
+        PaymentRow(expense, me, nameById, onClick)
     } else {
-        val payerId = expense.shares.firstOrNull { it.paidShare.isPositive }?.personId
-        val payerName = payerId?.let {
-            if (it == me) "You" else nameById[it]
-        } ?: "Someone"
+        val payers = expense.shares.filter { it.paidShare.isPositive }
+        val payerName = when {
+            payers.size > 1 -> "${payers.size} people"
+            else -> payers.firstOrNull()?.personId?.let {
+                if (it == me) "You" else nameById[it]
+            } ?: "Someone"
+        }
         ChargeRow(expense, me, payerName, onClick)
     }
 }
@@ -68,7 +69,7 @@ private fun ChargeRow(
     ) {
         DateBadge(expense.date)
         Spacer(Modifier.width(12.dp))
-        CategoryTile()
+        CategoryIcon(expense.categoryId)
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -112,7 +113,7 @@ private fun ChargeRow(
 }
 
 @Composable
-private fun SettlementRow(
+private fun PaymentRow(
     expense: Expense,
     me: PersonId,
     nameById: Map<PersonId, String>,
@@ -127,21 +128,23 @@ private fun SettlementRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        DateBadge(expense.date)
+        Spacer(Modifier.width(12.dp))
         Box(
             modifier = Modifier
-                .size(28.dp)
-                .clip(CircleShape)
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
                 .background(MaterialTheme.colorScheme.tertiaryContainer),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                Icons.Rounded.Handshake,
+                Icons.Outlined.Payments,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier.size(22.dp),
             )
         }
         Spacer(Modifier.width(12.dp))
@@ -149,27 +152,8 @@ private fun SettlementRow(
             text = "$payerName paid $recipientName ${expense.cost.format()}",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontStyle = FontStyle.Italic,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-@Composable
-private fun CategoryTile() {
-    Box(
-        modifier = Modifier
-            .size(40.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.secondaryContainer),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.Receipt,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = Modifier.size(22.dp),
         )
     }
 }
@@ -197,9 +181,4 @@ private fun DateBadge(date: LocalDate) {
             color = MaterialTheme.colorScheme.onSurface,
         )
     }
-}
-
-private fun monthAbbr(month: Int) = when (month) {
-    1 -> "Jan"; 2 -> "Feb"; 3 -> "Mar"; 4 -> "Apr"; 5 -> "May"; 6 -> "Jun"
-    7 -> "Jul"; 8 -> "Aug"; 9 -> "Sep"; 10 -> "Oct"; 11 -> "Nov"; else -> "Dec"
 }

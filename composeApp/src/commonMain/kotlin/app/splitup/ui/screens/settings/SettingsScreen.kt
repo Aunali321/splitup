@@ -1,9 +1,6 @@
 package app.splitup.ui.screens.settings
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,10 +8,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -24,6 +19,7 @@ import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,7 +41,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -54,10 +49,14 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.splitup.shared.data.repository.LocalDataReset
 import app.splitup.shared.data.repository.UserPreferencesRepository
+import app.splitup.shared.data.sync.SyncService
 import app.splitup.shared.domain.model.Currency
 import app.splitup.shared.domain.model.ThemePreference
 import app.splitup.shared.domain.model.UserPreferences
 import app.splitup.ui.components.CurrencyPicker
+import app.splitup.ui.components.SectionLabel
+import app.splitup.ui.components.SettingRow
+import app.splitup.ui.platform.AppLock
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -67,24 +66,41 @@ import org.koin.compose.viewmodel.koinViewModel
 class SettingsViewModel(
     private val prefsRepo: UserPreferencesRepository,
     private val reset: LocalDataReset,
+    private val sync: SyncService,
+    val appLock: AppLock,
 ) : ViewModel() {
 
     val preferences: StateFlow<UserPreferences> = prefsRepo.observe()
         .stateIn(viewModelScope, SharingStarted.Eagerly, UserPreferences())
 
     fun setHomeCurrency(currency: Currency) = viewModelScope.launch {
-        prefsRepo.save(prefsRepo.get().copy(homeCurrency = currency))
+        prefsRepo.update { it.copy(homeCurrency = currency) }
     }
 
     fun setTheme(theme: ThemePreference) = viewModelScope.launch {
-        prefsRepo.save(prefsRepo.get().copy(theme = theme))
+        prefsRepo.update { it.copy(theme = theme) }
     }
 
     fun setDynamicColor(enabled: Boolean) = viewModelScope.launch {
-        prefsRepo.save(prefsRepo.get().copy(useDynamicColor = enabled))
+        prefsRepo.update { it.copy(useDynamicColor = enabled) }
     }
 
+    /** Enabling requires a successful device auth first, so users can't lock themselves out. */
+    fun setAppLock(enabled: Boolean) {
+        if (!enabled) {
+            viewModelScope.launch { prefsRepo.update { it.copy(biometricLock = false) } }
+            return
+        }
+        appLock.authenticate { success ->
+            if (success) {
+                viewModelScope.launch { prefsRepo.update { it.copy(biometricLock = true) } }
+            }
+        }
+    }
+
+    /** Erasing is local, so any live sync session ends first — nothing propagates. */
     fun resetAllData() = viewModelScope.launch {
+        sync.signOut()
         reset.clearAll()
     }
 }
@@ -140,7 +156,7 @@ fun SettingsScreen(onBack: () -> Unit) {
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
-            SectionHeader("Preferences")
+            SectionLabel("Preferences")
             SettingRow(
                 icon = Icons.Outlined.CurrencyExchange,
                 title = "Default currency",
@@ -162,10 +178,21 @@ fun SettingsScreen(onBack: () -> Unit) {
                 },
                 onClick = { vm.setDynamicColor(!prefs.useDynamicColor) },
             )
+            if (vm.appLock.isAvailable) {
+                SettingRow(
+                    icon = Icons.Outlined.Lock,
+                    title = "App lock",
+                    subtitle = "Require biometrics or device credential on launch",
+                    trailing = {
+                        Switch(checked = prefs.biometricLock, onCheckedChange = vm::setAppLock)
+                    },
+                    onClick = { vm.setAppLock(!prefs.biometricLock) },
+                )
+            }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
-            SectionHeader("Data")
+            SectionLabel("Data")
             SettingRow(
                 icon = Icons.Outlined.DeleteForever,
                 title = "Erase all data",
@@ -176,12 +203,11 @@ fun SettingsScreen(onBack: () -> Unit) {
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
-            SectionHeader("About")
+            SectionLabel("About")
             SettingRow(
                 icon = Icons.Outlined.Info,
                 title = "SplitUp!",
                 subtitle = "Open source · v0.1.0",
-                onClick = {},
             )
 
             Spacer(Modifier.height(24.dp))
@@ -189,51 +215,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     }
 }
 
-@Composable
-private fun SectionHeader(text: String) {
-    Text(
-        text,
-        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, top = 12.dp, bottom = 8.dp),
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
-        fontWeight = FontWeight.SemiBold,
-    )
-}
 
-@Composable
-private fun SettingRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String? = null,
-    titleColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface,
-    trailing: @Composable (() -> Unit)? = null,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
-        }
-        Spacer(Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, color = titleColor)
-            subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        }
-        Spacer(Modifier.width(8.dp))
-        trailing?.invoke()
-    }
-}
 
 @Composable
 private fun ThemeDialog(current: ThemePreference, onPick: (ThemePreference) -> Unit, onDismiss: () -> Unit) {

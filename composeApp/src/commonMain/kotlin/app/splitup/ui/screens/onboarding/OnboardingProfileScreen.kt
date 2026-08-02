@@ -21,12 +21,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.splitup.shared.domain.model.Person
 import app.splitup.shared.domain.model.PersonId
 import app.splitup.shared.domain.repository.PersonRepository
 import app.splitup.shared.util.IdGenerator
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import org.koin.compose.viewmodel.koinViewModel
 
 class OnboardingProfileViewModel(
@@ -34,21 +38,34 @@ class OnboardingProfileViewModel(
     private val idGenerator: IdGenerator,
     private val clock: Clock = Clock.System,
 ) : ViewModel() {
+    private val _saving = MutableStateFlow(false)
+    val saving: StateFlow<Boolean> = _saving.asStateFlow()
+
+    /**
+     * Upserts the single `isMe` row — navigating back and continuing again (or a
+     * double tap) updates the same person instead of minting a duplicate "me".
+     */
     fun save(firstName: String, lastName: String?, email: String?, onDone: () -> Unit) {
+        if (!_saving.compareAndSet(expect = false, update = true)) return
         viewModelScope.launch {
-            val now = clock.now()
-            people.save(
-                Person(
-                    id = PersonId(idGenerator.next()),
-                    firstName = firstName.trim().ifBlank { "Me" },
-                    lastName = lastName?.trim()?.ifBlank { null },
-                    email = email?.trim()?.ifBlank { null },
-                    isMe = true,
-                    isRegistered = true,
-                    updatedAt = now,
+            try {
+                val now = clock.now()
+                val existing = people.getMe()
+                people.save(
+                    Person(
+                        id = existing?.id ?: PersonId(idGenerator.next()),
+                        firstName = firstName.trim().ifBlank { "Me" },
+                        lastName = lastName?.trim()?.ifBlank { null },
+                        email = email?.trim()?.ifBlank { null },
+                        isMe = true,
+                        isRegistered = true,
+                        updatedAt = now,
+                    )
                 )
-            )
-            onDone()
+                onDone()
+            } finally {
+                _saving.value = false
+            }
         }
     }
 }
@@ -56,6 +73,7 @@ class OnboardingProfileViewModel(
 @Composable
 fun OnboardingProfileScreen(onContinue: () -> Unit) {
     val vm: OnboardingProfileViewModel = koinViewModel()
+    val saving by vm.saving.collectAsStateWithLifecycle()
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -76,7 +94,7 @@ fun OnboardingProfileScreen(onContinue: () -> Unit) {
         Spacer(Modifier.weight(1f))
         Button(
             onClick = { vm.save(firstName, lastName, email, onContinue) },
-            enabled = firstName.trim().isNotBlank(),
+            enabled = firstName.trim().isNotBlank() && !saving,
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Continue") }
     }

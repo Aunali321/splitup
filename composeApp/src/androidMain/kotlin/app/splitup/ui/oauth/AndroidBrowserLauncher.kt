@@ -11,4 +11,6 @@ class AndroidBrowserLauncher(private val context: Context) : BrowserLauncher {
         }
         context.startActivity(intent)
     }
+
+    override val handlesOAuthRedirect = true
 }

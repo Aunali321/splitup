@@ -1,6 +1,5 @@
 package app.splitup.ui.screens.onboarding
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,7 +29,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.splitup.shared.data.repository.UserPreferencesRepository
 import app.splitup.shared.domain.model.Currency
-import app.splitup.shared.domain.model.UserPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,16 +46,14 @@ class OnboardingViewModel(
 
     fun saveCurrency(onDone: () -> Unit) {
         viewModelScope.launch {
-            val existing = prefsRepo.get() ?: UserPreferences()
-            prefsRepo.save(existing.copy(homeCurrency = _selectedCurrency.value))
+            prefsRepo.update { it.copy(homeCurrency = _selectedCurrency.value) }
             onDone()
         }
     }
 
     fun completeOnboarding(onDone: () -> Unit) {
         viewModelScope.launch {
-            val existing = prefsRepo.get() ?: UserPreferences()
-            prefsRepo.save(existing.copy(onboardingCompletedAt = kotlinx.datetime.Clock.System.now()))
+            prefsRepo.update { it.copy(onboardingCompletedAt = kotlin.time.Clock.System.now()) }
             onDone()
         }
     }

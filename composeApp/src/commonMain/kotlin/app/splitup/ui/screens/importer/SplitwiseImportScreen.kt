@@ -64,7 +64,11 @@ class SplitwiseImportViewModel(
     private val _status = MutableStateFlow<Status>(Status.Idle)
     val status: StateFlow<Status> = _status.asStateFlow()
 
+    /** False when this platform cannot receive the OAuth redirect (desktop). */
+    val oauthSupported: Boolean = browser.handlesOAuthRedirect
+
     private var pendingState: String? = null
+    private var pendingPkce: SplitwiseOAuth.Pkce? = null
 
     init {
         viewModelScope.launch {
@@ -76,21 +80,36 @@ class SplitwiseImportViewModel(
 
     @OptIn(ExperimentalUuidApi::class)
     fun startOAuthFlow() {
-        val state = Uuid.random().toString()
-        pendingState = state
-        _status.value = Status.AwaitingBrowser
-        browser.open(oauth.buildAuthorizeUrl(state))
+        viewModelScope.launch {
+            val state = Uuid.random().toString()
+            val pkce = oauth.createPkce()
+            pendingState = state
+            pendingPkce = pkce
+            _status.value = Status.AwaitingBrowser
+            browser.open(oauth.buildAuthorizeUrl(state, pkce.challenge))
+        }
+    }
+
+    fun cancelOAuth() {
+        pendingState = null
+        pendingPkce = null
+        _status.value = Status.Idle
     }
 
     /** Power-user path: paste an existing Splitwise access token / API key. */
     fun importWithToken(token: String) = runImport(token)
 
     private suspend fun handleCallback(payload: OAuthCallbackBus.Payload) {
+        // One shot per authorization attempt — a replayed redirect finds nothing.
+        val expectedState = pendingState
+        val pkce = pendingPkce
+        pendingState = null
+        pendingPkce = null
         if (payload.error != null) {
             _status.value = Status.Failed(payload.error)
             return
         }
-        if (payload.state == null || payload.state != pendingState) {
+        if (expectedState == null || pkce == null || payload.state != expectedState) {
             _status.value = Status.Failed("OAuth state mismatch — refused as a CSRF guard")
             return
         }
@@ -99,7 +118,7 @@ class SplitwiseImportViewModel(
             return
         }
         try {
-            val tokens = oauth.exchangeCode(code)
+            val tokens = oauth.exchangeCode(code, pkce.verifier)
             runImport(tokens.accessToken)
         } catch (t: Throwable) {
             _status.value = Status.Failed("Token exchange failed: ${t.message ?: t::class.simpleName}")
@@ -126,7 +145,7 @@ fun SplitwiseImportScreen(onDone: () -> Unit) {
     val vm: SplitwiseImportViewModel = koinViewModel()
     val status by vm.status.collectAsStateWithLifecycle()
     var manualToken by remember { mutableStateOf("") }
-    var showManual by remember { mutableStateOf(false) }
+    var showManual by remember { mutableStateOf(!vm.oauthSupported) }
 
     Scaffold(
         topBar = {
@@ -147,12 +166,20 @@ fun SplitwiseImportScreen(onDone: () -> Unit) {
             )
             when (val s = status) {
                 SplitwiseImportViewModel.Status.Idle -> {
-                    Button(onClick = vm::startOAuthFlow, modifier = Modifier.fillMaxWidth()) {
-                        Text("Connect with Splitwise")
-                    }
-                    HorizontalDivider(Modifier.padding(vertical = 16.dp))
-                    TextButton(onClick = { showManual = !showManual }) {
-                        Text(if (showManual) "Hide manual token entry" else "Have an access token?")
+                    if (vm.oauthSupported) {
+                        Button(onClick = vm::startOAuthFlow, modifier = Modifier.fillMaxWidth()) {
+                            Text("Connect with Splitwise")
+                        }
+                        HorizontalDivider(Modifier.padding(vertical = 16.dp))
+                        TextButton(onClick = { showManual = !showManual }) {
+                            Text(if (showManual) "Hide manual token entry" else "Have an access token?")
+                        }
+                    } else {
+                        Text(
+                            "This platform can't receive the Splitwise sign-in redirect. " +
+                                "Create a personal API key at secure.splitwise.com/apps and paste it here.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                     }
                     if (showManual) {
                         OutlinedTextField(
@@ -178,6 +205,7 @@ fun SplitwiseImportScreen(onDone: () -> Unit) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    TextButton(onClick = vm::cancelOAuth) { Text("Cancel") }
                 }
                 is SplitwiseImportViewModel.Status.Running -> {
                     Text(s.phase, style = MaterialTheme.typography.titleSmall)
@@ -192,7 +220,10 @@ fun SplitwiseImportScreen(onDone: () -> Unit) {
                 }
                 is SplitwiseImportViewModel.Status.Failed -> {
                     Text("Import failed: ${s.reason}", color = MaterialTheme.colorScheme.error)
-                    Button(onClick = vm::startOAuthFlow, modifier = Modifier.fillMaxWidth()) { Text("Try again") }
+                    Button(
+                        onClick = if (vm.oauthSupported) vm::startOAuthFlow else vm::cancelOAuth,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Try again") }
                 }
             }
         }

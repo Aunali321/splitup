@@ -1,19 +1,26 @@
 package app.splitup.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -22,17 +29,27 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import app.splitup.shared.domain.model.GroupId
+import app.splitup.shared.domain.model.PersonId
 import app.splitup.ui.navigation.BottomTab
 import app.splitup.ui.navigation.Motion
 import app.splitup.ui.navigation.Route
@@ -40,39 +57,74 @@ import app.splitup.ui.screens.account.AccountScreen
 import app.splitup.ui.screens.account.EditProfileScreen
 import app.splitup.ui.screens.activity.ActivityScreen
 import app.splitup.ui.screens.addexpense.AddExpenseScreen
+import app.splitup.ui.screens.addexpense.AddExpenseViewModel
+import app.splitup.ui.screens.addexpense.ExpenseWithScreen
 import app.splitup.ui.screens.addexpense.PaidByPickerScreen
 import app.splitup.ui.screens.addexpense.SplitPickerScreen
 import app.splitup.ui.screens.expense.ExpenseDetailScreen
 import app.splitup.ui.screens.friends.FriendDetailScreen
 import app.splitup.ui.screens.friends.FriendsScreen
+import app.splitup.ui.screens.groups.GroupBalancesScreen
 import app.splitup.ui.screens.groups.GroupDetailScreen
 import app.splitup.ui.screens.groups.GroupSettingsScreen
+import app.splitup.ui.screens.groups.GroupTotalsScreen
+import app.splitup.ui.screens.groups.GroupWhiteboardScreen
 import app.splitup.ui.screens.groups.GroupsScreen
+import app.splitup.ui.screens.groups.NonGroupScreen
 import app.splitup.ui.screens.importer.SplitwiseImportScreen
 import app.splitup.ui.screens.onboarding.OnboardingCurrencyScreen
 import app.splitup.ui.screens.onboarding.OnboardingImportScreen
 import app.splitup.ui.screens.onboarding.OnboardingProfileScreen
 import app.splitup.ui.screens.onboarding.OnboardingWelcomeScreen
 import app.splitup.ui.screens.settings.SettingsScreen
+import app.splitup.ui.screens.sync.SyncScreen
 import app.splitup.ui.screens.settleup.SettleUpScreen
 import app.splitup.ui.theme.SplitUpTheme
 import org.koin.compose.viewmodel.koinViewModel
+import org.koin.core.parameter.parametersOf
 
 @Composable
 fun App() {
     val rootViewModel: RootViewModel = koinViewModel()
     val prefs by rootViewModel.preferences.collectAsStateWithLifecycle()
+    val locked by rootViewModel.locked.collectAsStateWithLifecycle()
 
-    val darkTheme = when (prefs.theme) {
+    val darkTheme = when (prefs?.theme) {
         app.splitup.shared.domain.model.ThemePreference.DARK -> true
         app.splitup.shared.domain.model.ThemePreference.LIGHT -> false
         else -> isSystemInDarkTheme()
     }
 
-    SplitUpTheme(darkTheme = darkTheme, dynamicColor = prefs.useDynamicColor) {
+    SplitUpTheme(darkTheme = darkTheme, dynamicColor = prefs?.useDynamicColor ?: true) {
         Surface(color = MaterialTheme.colorScheme.background) {
-            if (prefs.needsOnboarding) OnboardingNav() else MainNav()
+            when {
+                prefs == null || locked == null -> {}
+                locked == true -> LockScreen(onUnlock = rootViewModel::unlock)
+                prefs?.needsOnboarding == true -> OnboardingNav()
+                else -> MainNav()
+            }
         }
+    }
+}
+
+@Composable
+private fun LockScreen(onUnlock: () -> Unit) {
+    LaunchedEffect(Unit) { onUnlock() }
+    Column(
+        modifier = Modifier.fillMaxSize().safeDrawingPadding(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            Icons.Outlined.Lock,
+            contentDescription = null,
+            modifier = Modifier.size(56.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(Modifier.height(16.dp))
+        Text("SplitUp is locked", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(24.dp))
+        FilledTonalButton(onClick = onUnlock) { Text("Unlock") }
     }
 }
 
@@ -100,9 +152,10 @@ private fun OnboardingNav() {
 private fun MainNav() {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
+    // Null on non-tab destinations — the bottom bar only exists on tab roots.
     val currentTab = BottomTab.entries.firstOrNull { tab ->
-        backStack?.destination?.route?.contains(tab.route::class.qualifiedName.orEmpty()) == true
-    } ?: BottomTab.GROUPS
+        backStack?.destination?.hasRoute(tab.route::class) == true
+    }
 
     Scaffold(
         // The inner screens use their own Scaffold + TopAppBar, which already
@@ -110,26 +163,28 @@ private fun MainNav() {
         // thing we hand back to inner screens via PaddingValues.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            NavigationBar {
-                BottomTab.entries.forEach { tab ->
-                    val selected = tab == currentTab
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = {
-                            nav.navigate(tab.route) {
-                                popUpTo(nav.graph.startDestinationId) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = { Icon(tabIcon(tab, selected), contentDescription = tab.label) },
-                        label = {
-                            Text(
-                                tab.label,
-                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                            )
-                        },
-                    )
+            if (currentTab != null) {
+                NavigationBar {
+                    BottomTab.entries.forEach { tab ->
+                        val selected = tab == currentTab
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = {
+                                nav.navigate(tab.route) {
+                                    popUpTo(nav.graph.startDestinationId) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            icon = { Icon(tabIcon(tab, selected), contentDescription = tab.label) },
+                            label = {
+                                Text(
+                                    tab.label,
+                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                )
+                            },
+                        )
+                    }
                 }
             }
         },
@@ -151,14 +206,25 @@ private fun MainNav() {
                     exitTransition = Motion.tabFadeExit,
                     popEnterTransition = Motion.tabFade,
                     popExitTransition = Motion.tabFadeExit,
-                ) { FriendsScreen(onOpenFriend = { nav.navigate(Route.FriendDetail(it.value)) }) }
+                ) {
+                    FriendsScreen(
+                        onOpenFriend = { nav.navigate(Route.FriendDetail(it.value)) },
+                        onAddExpense = { nav.navigate(Route.ExpenseWith) },
+                    )
+                }
 
                 composable<Route.Groups>(
                     enterTransition = Motion.tabFade,
                     exitTransition = Motion.tabFadeExit,
                     popEnterTransition = Motion.tabFade,
                     popExitTransition = Motion.tabFadeExit,
-                ) { GroupsScreen(onOpenGroup = { nav.navigate(Route.GroupDetail(it.value)) }) }
+                ) {
+                    GroupsScreen(
+                        onOpenGroup = { nav.navigate(Route.GroupDetail(it.value)) },
+                        onOpenNonGroup = { nav.navigate(Route.NonGroupExpenses) },
+                        onAddExpense = { nav.navigate(Route.ExpenseWith) },
+                    )
+                }
 
                 composable<Route.Activity>(
                     enterTransition = Motion.tabFade,
@@ -177,6 +243,7 @@ private fun MainNav() {
                         onOpenSettings = { nav.navigate(Route.Settings) },
                         onOpenImport = { nav.navigate(Route.SplitwiseImport) },
                         onOpenEditProfile = { nav.navigate(Route.EditProfile) },
+                        onOpenSync = { nav.navigate(Route.Sync) },
                     )
                 }
 
@@ -185,20 +252,67 @@ private fun MainNav() {
                     GroupDetailScreen(
                         groupId = args.groupId,
                         onBack = { nav.popBackStack() },
-                        onAddExpense = { nav.navigate(Route.AddExpense(groupId = args.groupId)) },
+                        onAddExpense = { nav.navigate(Route.AddExpenseFlow(groupId = args.groupId)) },
                         onSettleUp = { nav.navigate(Route.SettleUp(groupId = args.groupId)) },
                         onOpenExpense = { nav.navigate(Route.ExpenseDetail(it.value)) },
                         onOpenSettings = { nav.navigate(Route.GroupSettings(args.groupId)) },
+                        onOpenBalances = { nav.navigate(Route.GroupBalances(args.groupId)) },
+                        onOpenTotals = { nav.navigate(Route.GroupTotals(args.groupId)) },
+                        onOpenWhiteboard = { nav.navigate(Route.GroupWhiteboard(args.groupId)) },
                     )
+                }
+                composable<Route.GroupBalances> { entry ->
+                    val args = entry.toRoute<Route.GroupBalances>()
+                    GroupBalancesScreen(
+                        groupId = args.groupId,
+                        onBack = { nav.popBackStack() },
+                        onSettleUp = { nav.navigate(Route.SettleUp(groupId = args.groupId)) },
+                    )
+                }
+                composable<Route.NonGroupExpenses> {
+                    NonGroupScreen(
+                        onBack = { nav.popBackStack() },
+                        onAddExpense = { nav.navigate(Route.ExpenseWith) },
+                        onSettleUp = { nav.navigate(Route.SettleUp()) },
+                        onOpenExpense = { nav.navigate(Route.ExpenseDetail(it.value)) },
+                    )
+                }
+                composable<Route.GroupTotals> { entry ->
+                    val args = entry.toRoute<Route.GroupTotals>()
+                    GroupTotalsScreen(groupId = args.groupId, onBack = { nav.popBackStack() })
+                }
+                composable<Route.GroupWhiteboard> { entry ->
+                    val args = entry.toRoute<Route.GroupWhiteboard>()
+                    GroupWhiteboardScreen(groupId = args.groupId, onBack = { nav.popBackStack() })
                 }
                 composable<Route.FriendDetail> { entry ->
                     val args = entry.toRoute<Route.FriendDetail>()
                     FriendDetailScreen(
                         friendId = args.friendId,
                         onBack = { nav.popBackStack() },
-                        onAddExpense = { nav.navigate(Route.AddExpense(friendId = args.friendId)) },
+                        onAddExpense = { nav.navigate(Route.AddExpenseFlow(friendIds = listOf(args.friendId))) },
                         onSettleUp = { nav.navigate(Route.SettleUp(friendId = args.friendId)) },
                         onOpenExpense = { nav.navigate(Route.ExpenseDetail(it.value)) },
+                    )
+                }
+                composable<Route.ExpenseWith>(
+                    enterTransition = Motion.modalEnter,
+                    exitTransition = Motion.modalExit,
+                    popEnterTransition = Motion.modalPopEnter,
+                    popExitTransition = Motion.modalPopExit,
+                ) {
+                    ExpenseWithScreen(
+                        onBack = { nav.popBackStack() },
+                        onPickGroup = { groupId ->
+                            nav.navigate(Route.AddExpenseFlow(groupId = groupId.value)) {
+                                popUpTo<Route.ExpenseWith> { inclusive = true }
+                            }
+                        },
+                        onPickFriends = { ids ->
+                            nav.navigate(Route.AddExpenseFlow(friendIds = ids.map { it.value })) {
+                                popUpTo<Route.ExpenseWith> { inclusive = true }
+                            }
+                        },
                     )
                 }
                 composable<Route.ExpenseDetail> { entry ->
@@ -206,43 +320,36 @@ private fun MainNav() {
                     ExpenseDetailScreen(
                         expenseId = args.expenseId,
                         onBack = { nav.popBackStack() },
-                        onEdit = { nav.navigate(Route.AddExpense(expenseId = args.expenseId)) },
+                        onEdit = { nav.navigate(Route.AddExpenseFlow(expenseId = args.expenseId)) },
                     )
                 }
 
-                composable<Route.AddExpense>(
-                    enterTransition = Motion.modalEnter,
-                    exitTransition = Motion.modalExit,
-                    popEnterTransition = Motion.modalPopEnter,
-                    popExitTransition = Motion.modalPopExit,
-                ) { entry ->
-                    val args = entry.toRoute<Route.AddExpense>()
-                    AddExpenseScreen(
-                        groupId = args.groupId,
-                        friendId = args.friendId,
-                        expenseId = args.expenseId,
-                        onDone = { nav.popBackStack() },
-                        onOpenPaidBy = { nav.navigate(Route.PaidByPicker(args.groupId, args.friendId, args.expenseId)) },
-                        onOpenSplit = { nav.navigate(Route.SplitPicker(args.groupId, args.friendId, args.expenseId)) },
-                    )
-                }
-                composable<Route.PaidByPicker> { entry ->
-                    val args = entry.toRoute<Route.PaidByPicker>()
-                    PaidByPickerScreen(
-                        groupId = args.groupId,
-                        friendId = args.friendId,
-                        expenseId = args.expenseId,
-                        onBack = { nav.popBackStack() },
-                    )
-                }
-                composable<Route.SplitPicker> { entry ->
-                    val args = entry.toRoute<Route.SplitPicker>()
-                    SplitPickerScreen(
-                        groupId = args.groupId,
-                        friendId = args.friendId,
-                        expenseId = args.expenseId,
-                        onBack = { nav.popBackStack() },
-                    )
+                navigation<Route.AddExpenseFlow>(startDestination = Route.AddExpenseForm) {
+                    composable<Route.AddExpenseForm>(
+                        enterTransition = Motion.modalEnter,
+                        exitTransition = Motion.modalExit,
+                        popEnterTransition = Motion.modalPopEnter,
+                        popExitTransition = Motion.modalPopExit,
+                    ) { entry ->
+                        AddExpenseScreen(
+                            vm = entry.addExpenseViewModel(nav),
+                            onDone = { nav.popBackStack() },
+                            onOpenPaidBy = { nav.navigate(Route.PaidByPicker) },
+                            onOpenSplit = { nav.navigate(Route.SplitPicker) },
+                        )
+                    }
+                    composable<Route.PaidByPicker> { entry ->
+                        PaidByPickerScreen(
+                            vm = entry.addExpenseViewModel(nav),
+                            onBack = { nav.popBackStack() },
+                        )
+                    }
+                    composable<Route.SplitPicker> { entry ->
+                        SplitPickerScreen(
+                            vm = entry.addExpenseViewModel(nav),
+                            onBack = { nav.popBackStack() },
+                        )
+                    }
                 }
                 composable<Route.SettleUp>(
                     enterTransition = Motion.modalEnter,
@@ -265,6 +372,7 @@ private fun MainNav() {
                 ) { SplitwiseImportScreen(onDone = { nav.popBackStack() }) }
 
                 composable<Route.Settings> { SettingsScreen(onBack = { nav.popBackStack() }) }
+                composable<Route.Sync> { SyncScreen(onBack = { nav.popBackStack() }) }
 
                 composable<Route.EditProfile> { EditProfileScreen(onBack = { nav.popBackStack() }) }
 
@@ -281,6 +389,26 @@ private fun MainNav() {
             }
         }
     }
+}
+
+/**
+ * The AddExpense form and its pickers share one ViewModel scoped to the
+ * AddExpenseFlow graph entry, which also carries the flow's arguments.
+ */
+@Composable
+private fun NavBackStackEntry.addExpenseViewModel(nav: NavHostController): AddExpenseViewModel {
+    val parent = remember(this) { nav.getBackStackEntry(destination.parent!!.id) }
+    val args = parent.toRoute<Route.AddExpenseFlow>()
+    return koinViewModel(
+        viewModelStoreOwner = parent,
+        parameters = {
+            parametersOf(
+                args.groupId?.let { GroupId(it) },
+                args.friendIds.map { PersonId(it) },
+                args.expenseId,
+            )
+        },
+    )
 }
 
 private fun tabIcon(tab: BottomTab, selected: Boolean): ImageVector = when (tab) {

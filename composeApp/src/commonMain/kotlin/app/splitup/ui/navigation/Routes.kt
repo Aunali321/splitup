@@ -22,16 +22,29 @@ sealed interface Route {
 
     // Detail screens
     @Serializable data class GroupDetail(val groupId: String) : Route
+    @Serializable data class GroupBalances(val groupId: String) : Route
+    @Serializable data object NonGroupExpenses : Route
+    @Serializable data class GroupTotals(val groupId: String) : Route
+    @Serializable data class GroupWhiteboard(val groupId: String) : Route
     @Serializable data class FriendDetail(val friendId: String) : Route
     @Serializable data class ExpenseDetail(val expenseId: String) : Route
 
-    // Modal flows
-    @Serializable data class AddExpense(val groupId: String? = null, val friendId: String? = null, val expenseId: String? = null) : Route
-    @Serializable data class PaidByPicker(val groupId: String? = null, val friendId: String? = null, val expenseId: String? = null) : Route
-    @Serializable data class SplitPicker(val groupId: String? = null, val friendId: String? = null, val expenseId: String? = null) : Route
+    // Modal flows. AddExpenseFlow is a nested graph whose entry scopes the
+    // shared draft ViewModel — popping the flow clears the draft.
+    @Serializable data class AddExpenseFlow(
+        val groupId: String? = null,
+        val friendIds: List<String> = emptyList(),
+        val expenseId: String? = null,
+    ) : Route
+    @Serializable data object AddExpenseForm : Route
+    @Serializable data object PaidByPicker : Route
+    @Serializable data object SplitPicker : Route
+    /** "With you and:" chooser for expenses started without a group/friend context. */
+    @Serializable data object ExpenseWith : Route
     @Serializable data class SettleUp(val groupId: String? = null, val friendId: String? = null) : Route
     @Serializable data object SplitwiseImport : Route
     @Serializable data object Settings : Route
+    @Serializable data object Sync : Route
     @Serializable data object EditProfile : Route
     @Serializable data class GroupSettings(val groupId: String) : Route
 }

@@ -2,7 +2,6 @@ package app.splitup.ui.screens.account
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,9 +15,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Settings
@@ -43,10 +42,13 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.splitup.shared.domain.model.Person
 import app.splitup.shared.domain.repository.PersonRepository
+import app.splitup.ui.components.ListDivider
 import app.splitup.ui.components.PersonAvatar
+import app.splitup.ui.oauth.BrowserLauncher
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 class AccountViewModel(people: PersonRepository) : ViewModel() {
@@ -60,9 +62,11 @@ fun AccountScreen(
     onOpenSettings: () -> Unit,
     onOpenImport: () -> Unit,
     onOpenEditProfile: () -> Unit,
+    onOpenSync: () -> Unit,
 ) {
     val vm: AccountViewModel = koinViewModel()
     val me by vm.me.collectAsStateWithLifecycle()
+    val browser: BrowserLauncher = koinInject()
     Scaffold(
         topBar = {
             TopAppBar(
@@ -98,7 +102,7 @@ fun AccountScreen(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                ListDivider()
             }
 
             SectionHeader("Data")
@@ -107,6 +111,12 @@ fun AccountScreen(
                 title = "Import from Splitwise",
                 subtitle = "One-time pull of your Splitwise account",
                 onClick = onOpenImport,
+            )
+            AccountRow(
+                icon = Icons.Outlined.Sync,
+                title = "Sync",
+                subtitle = "Share groups across devices and with other people",
+                onClick = onOpenSync,
             )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -122,13 +132,12 @@ fun AccountScreen(
                 icon = Icons.Outlined.Info,
                 title = "About SplitUp!",
                 subtitle = "Open source · v0.1.0",
-                onClick = {},
             )
             AccountRow(
                 icon = Icons.Outlined.OpenInNew,
                 title = "Source code",
                 subtitle = "github.com/Aunali321/splitup",
-                onClick = {},
+                onClick = { browser.open("https://github.com/Aunali321/splitup") },
             )
             Spacer(Modifier.padding(bottom = 24.dp))
         }
@@ -147,11 +156,11 @@ private fun SectionHeader(text: String) {
 }
 
 @Composable
-private fun AccountRow(icon: ImageVector, title: String, subtitle: String? = null, onClick: () -> Unit) {
+private fun AccountRow(icon: ImageVector, title: String, subtitle: String? = null, onClick: (() -> Unit)? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -169,10 +178,12 @@ private fun AccountRow(icon: ImageVector, title: String, subtitle: String? = nul
             Text(title, style = MaterialTheme.typography.titleSmall)
             subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
-        Icon(
-            Icons.Outlined.ChevronRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        if (onClick != null) {
+            Icon(
+                Icons.Outlined.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }

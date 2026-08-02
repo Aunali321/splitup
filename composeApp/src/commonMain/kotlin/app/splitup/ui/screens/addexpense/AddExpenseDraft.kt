@@ -1,9 +1,13 @@
 package app.splitup.ui.screens.addexpense
 
+import app.splitup.shared.domain.model.CategoryId
 import app.splitup.shared.domain.model.Currency
+import app.splitup.shared.domain.model.DefaultCategories
 import app.splitup.shared.domain.model.Money
 import app.splitup.shared.domain.model.PersonId
+import app.splitup.shared.domain.model.RepeatInterval
 import app.splitup.shared.domain.split.SplitStrategy
+import app.splitup.ui.util.cleanDecimal
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,6 +34,11 @@ class AddExpenseDraft(
         val amount: String = "",
         val currency: Currency,
         val date: LocalDate,
+        val categoryId: CategoryId = DefaultCategories.UNCATEGORIZED,
+        val notes: String = "",
+        val repeat: RepeatInterval = RepeatInterval.NEVER,
+        /** `file://` URI of an attached receipt, or a remote URL when editing an import. */
+        val receiptUrl: String? = null,
         val participants: List<PersonId>,
         val payers: Map<PersonId, Money>,
         val strategy: SplitMode = SplitMode.Equal,
@@ -42,7 +51,7 @@ class AddExpenseDraft(
         val payerInputs: Map<PersonId, String> = emptyMap(),
     )
 
-    enum class SplitMode { Equal, Unequally, Percent, Shares }
+    enum class SplitMode { Equal, Unequally, Percent, Shares, Adjustment }
 
     private val _state = MutableStateFlow(
         State(
@@ -60,7 +69,7 @@ class AddExpenseDraft(
     fun setDescription(v: String) = _state.update { it.copy(description = v) }
     fun setAmount(v: String) {
         _state.update { s ->
-            val filtered = v.filterIndexed { i, c -> c.isDigit() || (c == '.' && v.indexOf('.') == i) }
+            val filtered = cleanDecimal(v, s.currency.decimals)
             val updated = s.copy(amount = filtered)
             // keep the payer total in sync for the single-payer case (most common);
             // in multi-payer mode the user owns the per-payer amounts, so leave them be.
@@ -84,6 +93,10 @@ class AddExpenseDraft(
         s.copy(currency = c, payers = payers)
     }
     fun setDate(d: LocalDate) = _state.update { it.copy(date = d) }
+    fun setCategory(c: CategoryId) = _state.update { it.copy(categoryId = c) }
+    fun setNotes(v: String) = _state.update { it.copy(notes = v) }
+    fun setRepeat(r: RepeatInterval) = _state.update { it.copy(repeat = r) }
+    fun setReceipt(url: String?) = _state.update { it.copy(receiptUrl = url) }
     fun setSinglePayer(person: PersonId) {
         _state.update { s ->
             val total = runCatching { if (s.amount.isBlank()) Money.zero(s.currency) else Money.parse(s.amount, s.currency) }
@@ -131,6 +144,9 @@ class AddExpenseDraft(
         _state.update { s ->
             val cleaned = when (s.strategy) {
                 SplitMode.Shares -> value.filter { it.isDigit() }
+                // Percent precision is basis points (2 decimals), independent of the
+                // money currency — a ¥ expense can still split 33.33/33.33/33.34.
+                SplitMode.Percent -> cleanDecimal(value, PERCENT_DECIMALS)
                 else -> cleanDecimal(value, s.currency.decimals)
             }
             s.copy(splitInputs = s.splitInputs + (person to cleaned))
@@ -144,6 +160,41 @@ class AddExpenseDraft(
         }
     }
 
+    fun setParticipants(people: List<PersonId>) = _state.update { it.copy(participants = people) }
+
+    /** Sum of the amounts entered so far (Unequally/Adjustment modes). */
+    fun enteredTotal(): Money = state.value.let { s ->
+        s.participants.fold(Money.zero(s.currency)) { acc, id -> acc + exactAmount(s, id) }
+    }
+
+    fun enteredBasisPoints(): Int = state.value.let { s -> s.participants.sumOf { basisPoints(s, it) } }
+
+    fun enteredShares(): Int = state.value.let { s -> s.participants.sumOf { shareCount(s, it) } }
+
+    /** What [person] would owe under the current inputs — the per-row preview. */
+    fun owedPreview(person: PersonId): Money {
+        val s = state.value
+        val zero = Money.zero(s.currency)
+        if (person !in s.participants) return zero
+        val total = runCatching { Money.parse(s.amount, s.currency) }.getOrNull() ?: return zero
+        return when (s.strategy) {
+            SplitMode.Equal -> Money.ofMinor(total.minorUnits / s.participants.size, s.currency)
+            SplitMode.Unequally -> exactAmount(s, person)
+            SplitMode.Percent ->
+                Money.ofMinor(total.minorUnits * basisPoints(s, person) / TOTAL_BP, s.currency)
+            SplitMode.Shares -> {
+                val totalShares = s.participants.sumOf { shareCount(s, it) }
+                if (totalShares == 0) zero
+                else Money.ofMinor(total.minorUnits * shareCount(s, person) / totalShares, s.currency)
+            }
+            SplitMode.Adjustment -> {
+                val sumAdj = s.participants.fold(zero) { acc, id -> acc + exactAmount(s, id) }
+                val remainder = (total.minorUnits - sumAdj.minorUnits).coerceAtLeast(0)
+                Money.ofMinor(remainder / s.participants.size, s.currency) + exactAmount(s, person)
+            }
+        }
+    }
+
     fun buildStrategy(): SplitStrategy {
         val s = state.value
         val parts = s.participants
@@ -153,6 +204,10 @@ class AddExpenseDraft(
             SplitMode.Percent -> SplitStrategy.Percent(parts.associateWith { basisPoints(s, it) })
             SplitMode.Shares -> SplitStrategy.Shares(
                 parts.associateWith { shareCount(s, it) }.filterValues { it > 0 },
+            )
+            SplitMode.Adjustment -> SplitStrategy.Adjustment(
+                participants = parts,
+                adjustments = parts.associateWith { exactAmount(s, it) }.filterValues { it.isPositive },
             )
         }
     }
@@ -183,29 +238,11 @@ class AddExpenseDraft(
             }
             SplitMode.Shares ->
                 if (s.participants.any { shareCount(s, it) > 0 }) null else "Add at least one share"
-        }
-    }
-
-    /** A short "entered of expected" line for the current mode, e.g. "₹40.00 of ₹100.00". */
-    fun splitSummary(): String {
-        val s = state.value
-        val total = runCatching { Money.parse(s.amount, s.currency) }.getOrNull() ?: Money.zero(s.currency)
-        return when (s.strategy) {
-            SplitMode.Equal -> {
-                val n = s.participants.size
-                "$n ${if (n == 1) "person" else "people"}"
-            }
-            SplitMode.Unequally -> {
+            SplitMode.Adjustment -> {
                 val sum = s.participants.fold(Money.zero(s.currency)) { acc, id -> acc + exactAmount(s, id) }
-                "${sum.format()} of ${total.format()}"
-            }
-            SplitMode.Percent -> {
-                val sum = s.participants.sumOf { basisPoints(s, it) }
-                "${formatPercent(sum)}% of 100%"
-            }
-            SplitMode.Shares -> {
-                val sum = s.participants.sumOf { shareCount(s, it) }
-                "$sum ${if (sum == 1) "share" else "shares"}"
+                // The engine splits the remainder equally, so adjustments must leave some of the total.
+                if (sum < total) null
+                else "Adjustments can't reach the total (${(sum - total).abs().format()} over)"
             }
         }
     }
@@ -214,32 +251,28 @@ class AddExpenseDraft(
         runCatching { Money.parse(s.splitInputs[id]?.ifBlank { "0" } ?: "0", s.currency) }
             .getOrDefault(Money.zero(s.currency))
 
-    private fun basisPoints(s: State, id: PersonId): Int {
-        val raw = s.splitInputs[id]?.trim().orEmpty()
-        if (raw.isBlank()) return 0
-        val parts = raw.split('.')
-        val whole = parts[0].toIntOrNull() ?: 0
-        val frac = parts.getOrNull(1)?.take(2)?.padEnd(2, '0')?.toIntOrNull() ?: 0
-        return whole * 100 + frac
-    }
+    private fun basisPoints(s: State, id: PersonId): Int = parsePercent(s.splitInputs[id])
 
     private fun shareCount(s: State, id: PersonId): Int = s.splitInputs[id]?.trim()?.toIntOrNull() ?: 0
 
     companion object {
-        private const val TOTAL_BP = 10_000
+        const val TOTAL_BP = 10_000
+        private const val PERCENT_DECIMALS = 2
+
+        /** "33.33" → 3333 basis points; blank or malformed → 0. */
+        fun parsePercent(raw: String?): Int {
+            val trimmed = raw?.trim().orEmpty()
+            if (trimmed.isBlank()) return 0
+            val parts = trimmed.split('.')
+            val whole = parts[0].toIntOrNull() ?: 0
+            val frac = parts.getOrNull(1)?.take(2)?.padEnd(2, '0')?.toIntOrNull() ?: 0
+            return whole * 100 + frac
+        }
 
         private fun parsePayers(inputs: Map<PersonId, String>, currency: Currency): Map<PersonId, Money> =
             inputs.filterValues { it.isNotBlank() }
                 .mapNotNull { (id, raw) -> runCatching { id to Money.parse(raw, currency) }.getOrNull() }
                 .toMap()
-
-        private fun cleanDecimal(value: String, decimals: Int): String {
-            val dot = value.indexOf('.')
-            val filtered = value.filterIndexed { i, c -> c.isDigit() || (c == '.' && i == dot) }
-            if (decimals == 0) return filtered.substringBefore('.')
-            val sep = filtered.indexOf('.')
-            return if (sep < 0) filtered else filtered.substring(0, minOf(filtered.length, sep + 1 + decimals))
-        }
 
         fun formatPercent(basisPoints: Int): String {
             val whole = basisPoints / 100

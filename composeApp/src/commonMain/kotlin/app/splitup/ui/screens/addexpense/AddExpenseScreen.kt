@@ -2,6 +2,8 @@ package app.splitup.ui.screens.addexpense
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,7 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -18,17 +20,20 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.CurrencyExchange
-import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Event
+import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,6 +43,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,39 +55,40 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.splitup.shared.domain.model.CategoryId
 import app.splitup.shared.domain.model.Currency
-import app.splitup.shared.domain.model.GroupId
-import app.splitup.shared.domain.model.PersonId
+import app.splitup.shared.domain.model.RepeatInterval
+import app.splitup.ui.components.CategoryIcon
+import app.splitup.ui.components.CategoryPicker
 import app.splitup.ui.components.CurrencyPicker
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toLocalDateTime
-import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddExpenseScreen(
-    groupId: String?,
-    friendId: String?,
-    expenseId: String? = null,
+    vm: AddExpenseViewModel,
     onDone: () -> Unit,
     onOpenPaidBy: () -> Unit,
     onOpenSplit: () -> Unit,
 ) {
-    val vm: AddExpenseViewModel = koinInject()
-    androidx.compose.runtime.LaunchedEffect(groupId, friendId, expenseId) {
-        vm.start(groupId?.let { GroupId(it) }, friendId?.let { PersonId(it) }, expenseId)
-    }
     val editing by vm.editing.collectAsStateWithLifecycle()
     val scope by vm.scope.collectAsStateWithLifecycle()
     val draftReady by vm.draftReady.collectAsStateWithLifecycle()
+    val scopeGone by vm.scopeGone.collectAsStateWithLifecycle()
+    LaunchedEffect(scopeGone) { if (scopeGone) onDone() }
     if (!draftReady) return
     val draftState by vm.draft.state.collectAsStateWithLifecycle()
     var showCurrencyPicker by remember { mutableStateOf(false) }
-    var showDatePicker by remember { mutableStateOf(false) }
+    var showDateDialog by remember { mutableStateOf(false) }
+    var showCategoryPicker by remember { mutableStateOf(false) }
+    var showNotesDialog by remember { mutableStateOf(false) }
+    var showReceiptDialog by remember { mutableStateOf(false) }
 
     if (showCurrencyPicker) {
         CurrencyPicker(
@@ -90,25 +97,40 @@ fun AddExpenseScreen(
         )
     }
 
-    if (showDatePicker) {
-        // DatePicker works in UTC day-millis; convert both ways in UTC to avoid
-        // an off-by-one when the device is behind/ahead of UTC.
-        val zone = TimeZone.UTC
-        val dateState = rememberDatePickerState(
-            initialSelectedDateMillis = draftState.date.atStartOfDayIn(zone).toEpochMilliseconds(),
+    if (showCategoryPicker) {
+        CategoryPicker(
+            onPick = { vm.draft.setCategory(it); showCategoryPicker = false },
+            onDismiss = { showCategoryPicker = false },
         )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    dateState.selectedDateMillis?.let { millis ->
-                        vm.draft.setDate(Instant.fromEpochMilliseconds(millis).toLocalDateTime(zone).date)
-                    }
-                    showDatePicker = false
-                }) { Text("OK") }
-            },
-            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } },
-        ) { DatePicker(state = dateState) }
+    }
+
+    if (showDateDialog) {
+        DateRepeatDialog(
+            initialDate = draftState.date,
+            repeat = draftState.repeat,
+            onRepeatChange = vm.draft::setRepeat,
+            onPick = vm.draft::setDate,
+            onDismiss = { showDateDialog = false },
+        )
+    }
+
+    if (showNotesDialog) {
+        NotesDialog(
+            initial = draftState.notes,
+            onSave = { vm.draft.setNotes(it); showNotesDialog = false },
+            onDismiss = { showNotesDialog = false },
+        )
+    }
+
+    if (showReceiptDialog) {
+        ReceiptDialog(
+            hasReceipt = draftState.receiptUrl != null,
+            canTakePhoto = vm.imagePicker.canTakePhoto,
+            onTakePhoto = { vm.attachReceipt(fromCamera = true); showReceiptDialog = false },
+            onPickImage = { vm.attachReceipt(fromCamera = false); showReceiptDialog = false },
+            onRemove = { vm.removeReceipt(); showReceiptDialog = false },
+            onDismiss = { showReceiptDialog = false },
+        )
     }
 
     val canSave = draftState.description.isNotBlank() &&
@@ -130,16 +152,19 @@ fun AddExpenseScreen(
                 actions = {
                     IconButton(
                         enabled = canSave,
-                        onClick = {
-                            vm.submit(
-                                groupId = groupId?.let { GroupId(it) },
-                                friendId = friendId?.let { PersonId(it) },
-                                onDone = onDone,
-                            )
-                        },
+                        onClick = { vm.submit(onDone) },
                     ) { Icon(Icons.Outlined.Check, contentDescription = "Save") }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
+            )
+        },
+        bottomBar = {
+            DetailBar(
+                scopeLabel = scope.scopeLabel,
+                showReceipt = vm.imagePicker.canPickImage,
+                onDate = { showDateDialog = true },
+                onReceipt = { showReceiptDialog = true },
+                onNotes = { showNotesDialog = true },
             )
         },
     ) { padding ->
@@ -170,15 +195,14 @@ fun AddExpenseScreen(
                 AssistChip(
                     onClick = {},
                     label = { Text(scope.scopeLabel) },
-                    leadingIcon = scope.leadingIcon,
                 )
             }
 
-            FieldRow(
-                icon = Icons.Outlined.Description,
+            DescriptionRow(
+                categoryId = draftState.categoryId,
                 value = draftState.description,
-                placeholder = "Enter a description",
                 onValueChange = vm.draft::setDescription,
+                onCategoryClick = { showCategoryPicker = true },
             )
 
             CurrencyAmountRow(
@@ -214,57 +238,152 @@ fun AddExpenseScreen(
                 )
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            val inlineError = if (draftState.description.isBlank() || draftState.amount.isBlank()) null
+            else vm.draft.payerError() ?: vm.draft.splitError()
+            inlineError?.let {
                 Text(
-                    "On ",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                AssistChip(
-                    onClick = { showDatePicker = true },
-                    label = { Text(formatExpenseDate(draftState.date)) },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.Event, contentDescription = null, modifier = Modifier.size(18.dp))
-                    },
+                    it,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center,
                 )
             }
 
-            Spacer(Modifier.weight(1f))
+            // Date and repeat surface in the bottom detail bar dialogs; show the
+            // choices here only once they differ from the defaults.
+            val summary = buildList {
+                if (draftState.repeat != RepeatInterval.NEVER) add(draftState.repeat.label)
+                if (draftState.receiptUrl != null) add("Receipt attached")
+                if (draftState.notes.isNotBlank()) add("Notes added")
+            }
+            if (summary.isNotEmpty()) {
+                Text(
+                    summary.joinToString(" · "),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+    }
+}
 
-            ScopeFooter(scope.scopeLabel)
+/** Splitwise's bottom detail bar: context on the left, date/camera/notes on the right. */
+@Composable
+private fun DetailBar(
+    scopeLabel: String,
+    showReceipt: Boolean,
+    onDate: () -> Unit,
+    onReceipt: () -> Unit,
+    onNotes: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(start = 16.dp, end = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Outlined.Groups,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            scopeLabel,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(onClick = onDate) {
+            Icon(Icons.Outlined.Event, contentDescription = "Date and repeat")
+        }
+        if (showReceipt) {
+            IconButton(onClick = onReceipt) {
+                Icon(Icons.Outlined.PhotoCamera, contentDescription = "Receipt")
+            }
+        }
+        IconButton(onClick = onNotes) {
+            Icon(Icons.Outlined.EditNote, contentDescription = "Notes")
+        }
+    }
+}
+
+/** Calendar plus Splitwise's repeat options, one dialog like their date screen. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DateRepeatDialog(
+    initialDate: LocalDate,
+    repeat: RepeatInterval,
+    onRepeatChange: (RepeatInterval) -> Unit,
+    onPick: (LocalDate) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    // DatePicker works in UTC day-millis; converting both ways in UTC avoids
+    // an off-by-one when the device is behind/ahead of UTC.
+    val zone = TimeZone.UTC
+    val state = rememberDatePickerState(
+        initialSelectedDateMillis = initialDate.atStartOfDayIn(zone).toEpochMilliseconds(),
+    )
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = {
+                state.selectedDateMillis?.let {
+                    onPick(Instant.fromEpochMilliseconds(it).toLocalDateTime(zone).date)
+                }
+                onDismiss()
+            }) { Text("OK") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    ) {
+        Column {
+            DatePicker(state = state, modifier = Modifier.weight(1f, fill = false))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Repeat", style = MaterialTheme.typography.labelLarge)
+                REPEAT_OPTIONS.forEach { option ->
+                    FilterChip(
+                        selected = option == repeat,
+                        onClick = { onRepeatChange(option) },
+                        label = { Text(if (option == RepeatInterval.NEVER) "Off" else option.label) },
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun FieldRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+private fun DescriptionRow(
+    categoryId: CategoryId,
     value: String,
-    placeholder: String,
     onValueChange: (String) -> Unit,
+    onCategoryClick: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        CategoryIcon(
+            categoryId = categoryId,
+            size = 48.dp,
+            modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onCategoryClick),
+        )
         Spacer(Modifier.width(12.dp))
         TextField(
             value = value,
             onValueChange = onValueChange,
-            placeholder = { Text(placeholder, style = MaterialTheme.typography.titleMedium) },
+            placeholder = { Text("Enter a description", style = MaterialTheme.typography.titleMedium) },
             textStyle = MaterialTheme.typography.titleMedium,
             singleLine = true,
             colors = transparentFieldColors(),
@@ -303,7 +422,12 @@ private fun CurrencyAmountRow(
         TextField(
             value = value,
             onValueChange = onValueChange,
-            placeholder = { Text("0${decimalSep(currency)}00", style = MaterialTheme.typography.headlineMedium) },
+            placeholder = {
+                Text(
+                    if (currency.decimals == 0) "0" else "0.00",
+                    style = MaterialTheme.typography.headlineMedium,
+                )
+            },
             textStyle = MaterialTheme.typography.headlineMedium,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             singleLine = true,
@@ -314,19 +438,63 @@ private fun CurrencyAmountRow(
 }
 
 @Composable
-private fun ScopeFooter(scopeLabel: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            Icons.Outlined.CurrencyExchange,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(Modifier.width(12.dp))
-        Text(scopeLabel, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-    }
+private fun ReceiptDialog(
+    hasReceipt: Boolean,
+    canTakePhoto: Boolean,
+    onTakePhoto: () -> Unit,
+    onPickImage: () -> Unit,
+    onRemove: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Receipt") },
+        text = {
+            Column {
+                if (canTakePhoto) ReceiptOption("Take photo", onTakePhoto)
+                ReceiptOption("Choose image", onPickImage)
+                if (hasReceipt) ReceiptOption("Remove receipt", onRemove, MaterialTheme.colorScheme.error)
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun ReceiptOption(label: String, onClick: () -> Unit, color: Color? = null) {
+    Text(
+        label,
+        style = MaterialTheme.typography.bodyLarge,
+        color = color ?: MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+    )
+}
+
+@Composable
+private fun NotesDialog(
+    initial: String,
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var text by remember { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Notes") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                placeholder = { Text("Add notes") },
+                minLines = 3,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        confirmButton = { TextButton(onClick = { onSave(text) }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -339,20 +507,30 @@ private fun transparentFieldColors() = TextFieldDefaults.colors(
     unfocusedIndicatorColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
 )
 
-private fun decimalSep(currency: Currency): String = if (currency.decimals == 0) "" else "."
-
-private fun formatExpenseDate(date: LocalDate): String {
-    val month = when (date.monthNumber) {
-        1 -> "Jan"; 2 -> "Feb"; 3 -> "Mar"; 4 -> "Apr"; 5 -> "May"; 6 -> "Jun"
-        7 -> "Jul"; 8 -> "Aug"; 9 -> "Sep"; 10 -> "Oct"; 11 -> "Nov"; else -> "Dec"
-    }
-    return "${date.dayOfMonth} $month ${date.year}"
-}
-
 private val AddExpenseDraft.SplitMode.label: String
     get() = when (this) {
         AddExpenseDraft.SplitMode.Equal -> "equally"
         AddExpenseDraft.SplitMode.Unequally -> "unequally"
         AddExpenseDraft.SplitMode.Percent -> "by percentages"
         AddExpenseDraft.SplitMode.Shares -> "by shares"
+        AddExpenseDraft.SplitMode.Adjustment -> "by adjustment"
+    }
+
+// Splitwise's repeat options; DAILY exists in the model for imports but is not offered.
+private val REPEAT_OPTIONS = listOf(
+    RepeatInterval.NEVER,
+    RepeatInterval.WEEKLY,
+    RepeatInterval.FORTNIGHTLY,
+    RepeatInterval.MONTHLY,
+    RepeatInterval.YEARLY,
+)
+
+internal val RepeatInterval.label: String
+    get() = when (this) {
+        RepeatInterval.NEVER -> "Doesn't repeat"
+        RepeatInterval.DAILY -> "Daily"
+        RepeatInterval.WEEKLY -> "Weekly"
+        RepeatInterval.FORTNIGHTLY -> "Fortnightly"
+        RepeatInterval.MONTHLY -> "Monthly"
+        RepeatInterval.YEARLY -> "Yearly"
     }

@@ -65,6 +65,19 @@ val PositiveBalanceDark = Color(0xFF6BD494)
 val NegativeBalance = Color(0xFFC4302B) // you owe
 val NegativeBalanceDark = Color(0xFFFF7A75)
 
+private val groupTints = listOf(
+    Color(0xFFE65100), Color(0xFF1B7F44), Color(0xFF7A4F9C),
+    Color(0xFFC2185B), Color(0xFF1976D2), Color(0xFF00897B),
+    Color(0xFFD84315), Color(0xFF455A64),
+)
+
+/** Stable per-group accent, hashed from the group name. */
+fun groupTint(name: String): Color {
+    var h = 0
+    for (c in name) h = 31 * h + c.code
+    return groupTints[(h.rem(groupTints.size) + groupTints.size).rem(groupTints.size)]
+}
+
 val LightScheme: ColorScheme = lightColorScheme(
     primary = PrimaryLight,
     onPrimary = OnPrimaryLight,
