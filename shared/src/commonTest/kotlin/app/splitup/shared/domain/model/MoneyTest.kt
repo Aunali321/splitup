@@ -1,45 +1,67 @@
 package app.splitup.shared.domain.model
 
-import io.kotest.matchers.shouldBe
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 
 class MoneyTest {
 
-    @Test fun `parse INR round trip`() {
+    @Test fun parseInrRoundTrip() {
         val m = Money.parse("1234.56", Currency.INR)
-        m.minorUnits shouldBe 123_456L
-        m.format() shouldBe "₹1234.56"
+        assertEquals(123_456L, m.minorUnits)
+        assertEquals("₹1,234.56", m.format())
     }
 
-    @Test fun `parse USD round trip`() {
+    @Test fun parseUsdRoundTrip() {
         val m = Money.parse("12.34", Currency.USD)
-        m.minorUnits shouldBe 1234L
-        m.format() shouldBe "$12.34"
+        assertEquals(1234L, m.minorUnits)
+        assertEquals("$12.34", m.format())
     }
 
-    @Test fun `parse negative`() {
-        Money.parse("-0.05", Currency.USD).minorUnits shouldBe -5L
+    @Test fun parseNegative() {
+        assertEquals(-5L, Money.parse("-0.05", Currency.USD).minorUnits)
     }
 
-    @Test fun `JPY has no decimals`() {
-        Money.parse("1500", Currency.JPY).format() shouldBe "¥1500"
+    @Test fun jpyHasNoDecimals() {
+        assertEquals("¥1,500", Money.parse("1500", Currency.JPY).format())
     }
 
-    @Test fun `parse rejects excess decimals`() {
+    @Test fun parseToleratesTrailingZeros() {
+        assertEquals(1000L, Money.parse("1000.0", Currency.JPY).minorUnits)
+        assertEquals(1250L, Money.parse("12.500", Currency.USD).minorUnits)
+    }
+
+    @Test fun parseRejectsExcessDecimals() {
         assertFailsWith<IllegalArgumentException> { Money.parse("1.234", Currency.USD) }
     }
 
-    @Test fun `arithmetic in same currency`() {
-        val a = Money.parse("10.00", Currency.USD)
-        val b = Money.parse("3.50", Currency.USD)
-        (a + b).format() shouldBe "$13.50"
-        (a - b).format() shouldBe "$6.50"
-        (b * 3).format() shouldBe "$10.50"
-        (-a).format() shouldBe "-$10.00"
+    @Test fun westernGroupingByThousands() {
+        assertEquals("$1,234,567.89", Money.ofMinor(123_456_789L, Currency.USD).format())
+        assertEquals("$999.99", Money.ofMinor(99_999L, Currency.USD).format())
     }
 
-    @Test fun `arithmetic across currencies is rejected`() {
+    @Test fun lakhGroupingForSouthAsianCurrencies() {
+        assertEquals("₹1,23,45,678.90", Money.ofMinor(1_234_567_890L, Currency.INR).format())
+        assertEquals("₨2,50,000.00", Money.ofMinor(25_000_000L, Currency.PKR).format())
+        assertEquals("৳1,00,000.00", Money.ofMinor(10_000_000L, Currency.BDT).format())
+    }
+
+    @Test fun plainStringHasNoGroupingOrSymbol() {
+        assertEquals("1234.56", Money.ofMinor(123_456L, Currency.INR).toPlainString())
+        assertEquals("1250", Money.ofMinor(1250L, Currency.JPY).toPlainString())
+    }
+
+    @Test fun arithmeticInSameCurrency() {
+        val a = Money.parse("10.00", Currency.USD)
+        val b = Money.parse("3.50", Currency.USD)
+        assertEquals("$13.50", (a + b).format())
+        assertEquals("$6.50", (a - b).format())
+        assertEquals("$10.50", (b * 3).format())
+        assertEquals("-$10.00", (-a).format())
+    }
+
+    @Test fun arithmeticAcrossCurrenciesIsRejected() {
         val usd = Money.parse("10.00", Currency.USD)
         val inr = Money.parse("10.00", Currency.INR)
         assertFailsWith<IllegalArgumentException> { usd + inr }
@@ -47,21 +69,24 @@ class MoneyTest {
         assertFailsWith<IllegalArgumentException> { usd.compareTo(inr) }
     }
 
-    @Test fun `format pads minor units`() {
-        Money.ofMinor(5, Currency.USD).format() shouldBe "$0.05"
-        Money.ofMinor(50, Currency.USD).format() shouldBe "$0.50"
-        Money.ofMinor(500, Currency.USD).format() shouldBe "$5.00"
+    @Test fun formatPadsMinorUnits() {
+        assertEquals("$0.05", Money.ofMinor(5, Currency.USD).format())
+        assertEquals("$0.50", Money.ofMinor(50, Currency.USD).format())
+        assertEquals("$5.00", Money.ofMinor(500, Currency.USD).format())
     }
 
-    @Test fun `default fallback currency is USD`() {
-        // The user picks their real home currency in onboarding; DEFAULT is only
-        // a fallback for paths that run before onboarding completes.
-        Currency.DEFAULT shouldBe Currency.USD
+    @Test fun threeDecimalCurrencies() {
+        val m = Money.parse("1.234", Currency.BHD)
+        assertEquals(1234L, m.minorUnits)
     }
 
-    @Test fun `lookup by code is case-insensitive`() {
-        Currency.ofCode("inr") shouldBe Currency.INR
-        Currency.ofCode("USD") shouldBe Currency.USD
-        Currency.ofCode("ZZZ") shouldBe null
+    @Test fun defaultFallbackCurrencyIsUsd() {
+        assertEquals(Currency.USD, Currency.DEFAULT)
+    }
+
+    @Test fun lookupByCodeIsCaseInsensitive() {
+        assertEquals(Currency.INR, Currency.ofCode("inr"))
+        assertEquals(Currency.USD, Currency.ofCode("USD"))
+        assertNull(Currency.ofCode("ZZZ"))
     }
 }
