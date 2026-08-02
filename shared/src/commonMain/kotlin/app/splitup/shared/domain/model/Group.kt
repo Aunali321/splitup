@@ -1,6 +1,7 @@
 package app.splitup.shared.domain.model
 
-import kotlinx.datetime.Instant
+import app.splitup.shared.domain.split.SplitStrategy
+import kotlin.time.Instant
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -12,7 +13,10 @@ data class Group(
     val coverUrl: String? = null,
     val defaultCurrencyCode: String = "USD",
     val members: List<GroupMember> = emptyList(),
-    val simplifyByDefault: Boolean = true,
+    /** Off for new groups — the user turns it on once all expenses are in. */
+    val simplifyByDefault: Boolean = false,
+    /** Pre-selected split for new expenses in this group (equal/percent/shares only). */
+    val defaultSplit: SplitStrategy? = null,
     val whiteboard: String? = null,
     val externalSource: ExternalSource? = null,
     val externalId: String? = null,

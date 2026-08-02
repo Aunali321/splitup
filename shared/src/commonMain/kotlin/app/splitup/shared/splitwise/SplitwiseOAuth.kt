@@ -7,9 +7,13 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.forms.submitForm
 import io.ktor.http.Parameters
 import io.ktor.serialization.kotlinx.json.json
+import io.ktor.util.Digest
+import io.ktor.util.encodeBase64
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 class SplitwiseOAuth(
     private val engineProvider: () -> HttpClientEngine,
@@ -20,18 +24,36 @@ class SplitwiseOAuth(
         coerceInputValues = true
     }
 
-    fun buildAuthorizeUrl(state: String): String {
+    /** PKCE (RFC 7636, S256) pair for one authorization attempt. */
+    data class Pkce(val verifier: String, val challenge: String)
+
+    @OptIn(ExperimentalUuidApi::class)
+    suspend fun createPkce(): Pkce {
+        val verifier = Uuid.random().toString() + Uuid.random().toString()
+        val digest = Digest("SHA-256")
+        digest += verifier.encodeToByteArray()
+        val challenge = digest.build()
+            .encodeBase64()
+            .replace('+', '-')
+            .replace('/', '_')
+            .trimEnd('=')
+        return Pkce(verifier, challenge)
+    }
+
+    fun buildAuthorizeUrl(state: String, codeChallenge: String): String {
         val params = listOf(
             "client_id" to credentials.consumerKey,
             "redirect_uri" to credentials.redirectUri,
             "response_type" to "code",
             "state" to state,
+            "code_challenge" to codeChallenge,
+            "code_challenge_method" to "S256",
         )
         val query = params.joinToString("&") { (k, v) -> "$k=" + urlEncode(v) }
         return "https://secure.splitwise.com/oauth/authorize?$query"
     }
 
-    suspend fun exchangeCode(code: String): TokenResponse {
+    suspend fun exchangeCode(code: String, codeVerifier: String): TokenResponse {
         val client = HttpClient(engineProvider()) {
             install(ContentNegotiation) { json(json) }
         }
@@ -44,6 +66,7 @@ class SplitwiseOAuth(
                     append("redirect_uri", credentials.redirectUri)
                     append("client_id", credentials.consumerKey)
                     append("client_secret", credentials.consumerSecret)
+                    append("code_verifier", codeVerifier)
                 },
             ).body()
         } finally {
@@ -85,8 +108,11 @@ data class SplitwiseCredentials(
 
 /**
  * Embedded "Migration" OAuth app credentials. Every install uses the same client
- * so end users don't have to register their own Splitwise app to migrate. Forks
- * replace these and add their own redirectUri on the Splitwise app config side.
+ * so end users don't have to register their own Splitwise app to migrate. The
+ * consumerSecret is therefore public by design and provides no client
+ * authentication — the flow's real protections are the per-attempt `state`
+ * check and PKCE. Forks replace these and add their own redirectUri on the
+ * Splitwise app config side.
  */
 object SharedSplitwiseCredentials {
     val PROD = SplitwiseCredentials(

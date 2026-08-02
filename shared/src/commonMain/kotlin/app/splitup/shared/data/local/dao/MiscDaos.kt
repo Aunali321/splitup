@@ -1,34 +1,13 @@
 package app.splitup.shared.data.local.dao
 
-import androidx.room.Dao
-import androidx.room.Query
-import androidx.room.Transaction
-import androidx.room.Upsert
-import app.splitup.shared.data.local.entity.CategoryEntity
+import androidx.room3.Dao
+import androidx.room3.Query
+import androidx.room3.Transaction
+import androidx.room3.Upsert
 import app.splitup.shared.data.local.entity.CommentEntity
-import app.splitup.shared.data.local.entity.ExchangeRateEntity
-import app.splitup.shared.data.local.entity.SettlementEntity
+import app.splitup.shared.data.local.entity.SyncSeedEntity
 import app.splitup.shared.data.local.entity.UserPreferencesEntity
 import kotlinx.coroutines.flow.Flow
-import kotlinx.datetime.LocalDate
-
-@Dao
-interface SettlementDao {
-    @Query("SELECT * FROM settlement WHERE group_id = :groupId AND deleted_at IS NULL ORDER BY date DESC")
-    fun observeInGroup(groupId: String): Flow<List<SettlementEntity>>
-
-    @Query("""
-        SELECT * FROM settlement
-        WHERE deleted_at IS NULL
-          AND ((from_person_id = :a AND to_person_id = :b) OR (from_person_id = :b AND to_person_id = :a))
-        ORDER BY date DESC
-    """)
-    fun observeBetween(a: String, b: String): Flow<List<SettlementEntity>>
-
-    @Upsert suspend fun upsert(settlement: SettlementEntity)
-    @Query("UPDATE settlement SET deleted_at = :now, updated_at = :now WHERE id = :id")
-    suspend fun softDelete(id: String, now: Long)
-}
 
 @Dao
 interface CommentDao {
@@ -41,56 +20,108 @@ interface CommentDao {
 }
 
 @Dao
-interface CategoryDao {
-    @Query("SELECT * FROM category ORDER BY sort_order ASC")
-    fun observeAll(): Flow<List<CategoryEntity>>
-
-    @Query("SELECT * FROM category ORDER BY sort_order ASC")
-    suspend fun getAll(): List<CategoryEntity>
-
-    @Upsert suspend fun upsertAll(categories: List<CategoryEntity>)
-}
-
-@Dao
-interface ExchangeRateDao {
-    @Query("""
-        SELECT * FROM exchange_rate
-        WHERE from_code = :from AND to_code = :to AND date <= :date
-        ORDER BY date DESC
-        LIMIT 1
-    """)
-    suspend fun nearest(from: String, to: String, date: LocalDate): ExchangeRateEntity?
-
-    @Upsert suspend fun upsertAll(rates: List<ExchangeRateEntity>)
-}
-
-@Dao
 interface MaintenanceDao {
+    /**
+     * external ids stay behind as NULL: the copy would trip the unique
+     * (external_source, external_id) index while the source row still exists,
+     * and the synced canonical row is authoritative for them anyway.
+     */
+    @Query(
+        """
+        INSERT OR IGNORE INTO person (id, account_id, first_name, last_name, email, phone,
+            avatar_url, default_currency_code, country_code, is_me, is_registered,
+            external_source, external_id, updated_at, deleted_at)
+        SELECT :to, account_id, first_name, last_name, email, phone,
+            avatar_url, default_currency_code, country_code, 1, is_registered,
+            NULL, NULL, updated_at, deleted_at
+        FROM person WHERE id = :from
+        """,
+    )
+    suspend fun copyPersonAs(from: String, to: String)
+
+    @Query(
+        """
+        DELETE FROM expense_share WHERE person_id = :from
+          AND expense_id IN (SELECT expense_id FROM expense_share WHERE person_id = :to)
+        """,
+    )
+    suspend fun dropCollidingShares(from: String, to: String)
+
+    @Query("UPDATE expense_share SET person_id = :to, id = expense_id || ':' || :to WHERE person_id = :from")
+    suspend fun repointShares(from: String, to: String)
+
+    @Query(
+        """
+        DELETE FROM group_member WHERE person_id = :from
+          AND group_id IN (SELECT group_id FROM group_member WHERE person_id = :to)
+        """,
+    )
+    suspend fun dropCollidingMemberships(from: String, to: String)
+
+    @Query("UPDATE group_member SET person_id = :to, id = group_id || ':' || :to WHERE person_id = :from")
+    suspend fun repointMemberships(from: String, to: String)
+
+    @Query("UPDATE expense SET created_by = :to WHERE created_by = :from")
+    suspend fun repointAuthoredExpenses(from: String, to: String)
+
+    @Query("UPDATE comment SET author_id = :to WHERE author_id = :from")
+    suspend fun repointComments(from: String, to: String)
+
+    @Query("UPDATE person SET is_me = 1 WHERE id = :id")
+    suspend fun markMe(id: String)
+
+    @Query("DELETE FROM person WHERE id = :id")
+    suspend fun deletePerson(id: String)
+
+    /**
+     * Signing in on a second device finds the account already has a person, so the
+     * locally-created one is folded into the canonical row rather than duplicated.
+     * The canonical row usually hasn't synced down yet, so it is created here as a
+     * copy of the local one — the download upsert later overwrites every synced
+     * column while leaving is_me alone.
+     */
+    @Transaction
+    suspend fun repointPerson(from: String, to: String) {
+        copyPersonAs(from, to)
+        dropCollidingShares(from, to)
+        repointShares(from, to)
+        dropCollidingMemberships(from, to)
+        repointMemberships(from, to)
+        repointAuthoredExpenses(from, to)
+        repointComments(from, to)
+        deletePerson(from)
+        markMe(to)
+    }
+
     @Query("DELETE FROM expense_share") suspend fun clearExpenseShares()
     @Query("DELETE FROM expense") suspend fun clearExpenses()
-    @Query("DELETE FROM settlement") suspend fun clearSettlements()
     @Query("DELETE FROM comment") suspend fun clearComments()
     @Query("DELETE FROM group_member") suspend fun clearGroupMembers()
     @Query("DELETE FROM group_") suspend fun clearGroups()
     @Query("DELETE FROM person") suspend fun clearPeople()
-    @Query("DELETE FROM category") suspend fun clearCategories()
-    @Query("DELETE FROM exchange_rate") suspend fun clearExchangeRates()
     @Query("DELETE FROM user_preferences") suspend fun clearPreferences()
+    @Query("DELETE FROM sync_seed") suspend fun clearSyncSeeds()
 
     /** Wipes every row. Children are cleared before parents so foreign keys never block. */
     @Transaction
     suspend fun clearAll() {
         clearExpenseShares()
         clearExpenses()
-        clearSettlements()
         clearComments()
         clearGroupMembers()
         clearGroups()
         clearPeople()
-        clearCategories()
-        clearExchangeRates()
         clearPreferences()
+        clearSyncSeeds()
     }
+}
+
+@Dao
+interface SyncSeedDao {
+    @Query("SELECT EXISTS(SELECT 1 FROM sync_seed WHERE account_id = :accountId)")
+    suspend fun isSeeded(accountId: String): Boolean
+
+    @Upsert suspend fun markSeeded(seed: SyncSeedEntity)
 }
 
 @Dao

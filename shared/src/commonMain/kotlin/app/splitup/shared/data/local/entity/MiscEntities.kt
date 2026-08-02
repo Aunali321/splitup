@@ -1,36 +1,9 @@
 package app.splitup.shared.data.local.entity
 
-import androidx.room.Entity
-import androidx.room.Index
-import androidx.room.PrimaryKey
-import kotlinx.datetime.Instant
-import kotlinx.datetime.LocalDate
-
-@Entity(
-    tableName = "settlement",
-    indices = [
-        Index("group_id"),
-        Index("from_person_id"),
-        Index("to_person_id"),
-        Index("external_source", "external_id", unique = true),
-    ],
-)
-data class SettlementEntity(
-    @PrimaryKey val id: String,
-    val group_id: String?,
-    val from_person_id: String,
-    val to_person_id: String,
-    val amount_minor_units: Long,
-    val currency_code: String,
-    val date: LocalDate,
-    val method: String,
-    val notes: String?,
-    val external_source: String?,
-    val external_id: String?,
-    val created_at: Instant,
-    val updated_at: Instant,
-    val deleted_at: Instant?,
-)
+import androidx.room3.Entity
+import androidx.room3.Index
+import androidx.room3.PrimaryKey
+import kotlin.time.Instant
 
 @Entity(
     tableName = "comment",
@@ -46,30 +19,10 @@ data class CommentEntity(
     val deleted_at: Instant?,
 )
 
-@Entity(
-    tableName = "category",
-    indices = [Index("parent_id")],
-)
-data class CategoryEntity(
-    @PrimaryKey val id: String,
-    val parent_id: String?,
-    val name: String,
-    val icon: String,
-    val sort_order: Int,
-)
-
-@Entity(
-    tableName = "exchange_rate",
-    primaryKeys = ["from_code", "to_code", "date"],
-)
-data class ExchangeRateEntity(
-    val from_code: String,
-    val to_code: String,
-    /** rate * 10^8 */
-    val rate8: Long,
-    val date: LocalDate,
-    val source: String,
-    val fetched_at: Instant,
+/** Accounts whose pre-sign-in local rows have already been enqueued for upload. */
+@Entity(tableName = "sync_seed")
+data class SyncSeedEntity(
+    @PrimaryKey val account_id: String,
 )
 
 @Entity(tableName = "user_preferences")

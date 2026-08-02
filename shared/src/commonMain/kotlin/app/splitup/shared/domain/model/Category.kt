@@ -11,65 +11,81 @@ data class Category(
     val sortOrder: Int,
 )
 
+/**
+ * The Splitwise category taxonomy — seven parent groups, same names and
+ * grouping, so imported data and muscle memory carry over 1:1. [icon] is a
+ * stable slug the UI maps to a vector; ids are ours (Splitwise's numeric ids
+ * are mapped in the importer).
+ */
 object DefaultCategories {
-    private fun cat(id: String, parent: String?, name: String, icon: String, order: Int) =
+    val UNCATEGORIZED = CategoryId("uncategorized")
+
+    private fun cat(id: String, parent: String?, name: String, icon: String = id, order: Int = 0) =
         Category(CategoryId(id), parent?.let { CategoryId(it) }, name, icon, order)
 
     val all: List<Category> = listOf(
-        cat("uncategorized", null, "Uncategorized", "uncategorized", 0),
+        cat("uncategorized", null, "Uncategorized", order = 0),
+        cat("general", "uncategorized", "General", order = 1),
 
-        cat("food_drink", null, "Food & Drink", "food", 100),
-        cat("groceries", "food_drink", "Groceries", "groceries", 101),
-        cat("dining", "food_drink", "Dining out", "dining", 102),
-        cat("liquor", "food_drink", "Liquor", "liquor", 103),
+        cat("entertainment", null, "Entertainment", order = 100),
+        cat("games", "entertainment", "Games", order = 101),
+        cat("movies", "entertainment", "Movies", order = 102),
+        cat("music", "entertainment", "Music", order = 103),
+        cat("sports", "entertainment", "Sports", order = 104),
+        cat("entertainment_other", "entertainment", "Other", "entertainment", 105),
 
-        cat("home", null, "Home", "home", 200),
-        cat("rent", "home", "Rent", "rent", 201),
-        cat("mortgage", "home", "Mortgage", "mortgage", 202),
-        cat("electronics", "home", "Electronics", "electronics", 203),
-        cat("furniture", "home", "Furniture", "furniture", 204),
-        cat("household", "home", "Household supplies", "supplies", 205),
-        cat("maintenance", "home", "Maintenance", "maintenance", 206),
-        cat("mortgage_pets", "home", "Pets", "pets", 207),
+        cat("food_drink", null, "Food and drink", "food", 200),
+        cat("dining", "food_drink", "Dining out", order = 201),
+        cat("groceries", "food_drink", "Groceries", order = 202),
+        cat("liquor", "food_drink", "Liquor", order = 203),
+        cat("food_other", "food_drink", "Other", "food", 204),
 
-        cat("utilities", null, "Utilities", "utilities", 300),
-        cat("electricity", "utilities", "Electricity", "electricity", 301),
-        cat("water", "utilities", "Water", "water", 302),
-        cat("gas", "utilities", "Gas", "gas", 303),
-        cat("internet", "utilities", "Internet", "internet", 304),
-        cat("trash", "utilities", "Trash", "trash", 305),
-        cat("phone", "utilities", "Phone", "phone", 306),
-        cat("tv", "utilities", "TV", "tv", 307),
+        cat("home", null, "Home", order = 300),
+        cat("electronics", "home", "Electronics", order = 301),
+        cat("furniture", "home", "Furniture", order = 302),
+        cat("household", "home", "Household supplies", "supplies", 303),
+        cat("maintenance", "home", "Maintenance", order = 304),
+        cat("mortgage", "home", "Mortgage", order = 305),
+        cat("pets", "home", "Pets", order = 306),
+        cat("rent", "home", "Rent", order = 307),
+        cat("services", "home", "Services", order = 308),
+        cat("home_other", "home", "Other", "home", 309),
 
-        cat("transportation", null, "Transportation", "transport", 400),
-        cat("car", "transportation", "Car", "car", 401),
-        cat("fuel", "transportation", "Fuel", "fuel", 402),
-        cat("parking", "transportation", "Parking", "parking", 403),
-        cat("taxi", "transportation", "Taxi / Rideshare", "taxi", 404),
-        cat("public_transit", "transportation", "Public transit", "transit", 405),
-        cat("flight", "transportation", "Flight", "flight", 406),
+        cat("life", null, "Life", order = 400),
+        cat("clothing", "life", "Clothing", order = 401),
+        cat("gifts", "life", "Gifts", order = 402),
+        cat("insurance", "life", "Insurance", order = 403),
+        cat("medical", "life", "Medical expenses", order = 404),
+        cat("taxes", "life", "Taxes", order = 405),
+        cat("life_other", "life", "Other", "life", 406),
 
-        cat("entertainment", null, "Entertainment", "entertainment", 500),
-        cat("movies", "entertainment", "Movies", "movies", 501),
-        cat("music", "entertainment", "Music", "music", 502),
-        cat("sports", "entertainment", "Sports", "sports", 503),
-        cat("games", "entertainment", "Games", "games", 504),
+        cat("transportation", null, "Transportation", "transport", 500),
+        cat("bicycle", "transportation", "Bicycle", order = 501),
+        cat("bus_train", "transportation", "Bus/train", "transit", 502),
+        cat("car", "transportation", "Car", order = 503),
+        cat("fuel", "transportation", "Gas/fuel", order = 504),
+        cat("hotel", "transportation", "Hotel", order = 505),
+        cat("parking", "transportation", "Parking", order = 506),
+        cat("plane", "transportation", "Plane", order = 507),
+        cat("taxi", "transportation", "Taxi", order = 508),
+        cat("transport_other", "transportation", "Other", "transport", 509),
 
-        cat("life", null, "Life", "life", 600),
-        cat("childcare", "life", "Childcare", "childcare", 601),
-        cat("clothing", "life", "Clothing", "clothing", 602),
-        cat("education", "life", "Education", "education", 603),
-        cat("gifts", "life", "Gifts", "gifts", 604),
-        cat("insurance", "life", "Insurance", "insurance", 605),
-        cat("medical", "life", "Medical", "medical", 606),
-        cat("taxes", "life", "Taxes", "taxes", 607),
-
-        cat("travel", null, "Travel", "travel", 700),
-        cat("lodging", "travel", "Lodging", "lodging", 701),
-        cat("travel_misc", "travel", "Travel — other", "travel_other", 799),
-
-        cat("financial", null, "Financial", "financial", 800),
-        cat("fees", "financial", "Bank fees", "fees", 801),
-        cat("settlement", "financial", "Settlement", "settlement", 802),
+        cat("utilities", null, "Utilities", order = 600),
+        cat("cleaning", "utilities", "Cleaning", order = 601),
+        cat("electricity", "utilities", "Electricity", order = 602),
+        cat("heat_gas", "utilities", "Heat/gas", "heat", 603),
+        cat("trash", "utilities", "Trash", order = 604),
+        cat("tv_phone_internet", "utilities", "TV/Phone/Internet", "tv", 605),
+        cat("water", "utilities", "Water", order = 606),
+        cat("utilities_other", "utilities", "Other", "utilities", 607),
     )
+
+    private val byId: Map<CategoryId, Category> = all.associateBy { it.id }
+
+    val parents: List<Category> = all.filter { it.parentId == null }.sortedBy { it.sortOrder }
+
+    fun get(id: CategoryId): Category = byId[id] ?: byId.getValue(UNCATEGORIZED)
+
+    fun childrenOf(parent: CategoryId): List<Category> =
+        all.filter { it.parentId == parent }.sortedBy { it.sortOrder }
 }

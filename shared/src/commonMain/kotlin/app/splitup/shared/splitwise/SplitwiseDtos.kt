@@ -100,6 +100,7 @@ data class SwExpense(
     val created_by: SwUser? = null,
     val category: SwCategory? = null,
     val repeat_interval: String? = null,
+    val next_repeat: String? = null,
     val users: List<SwExpenseUser> = emptyList(),
     val receipt: SwReceipt? = null,
     val comments_count: Int = 0,
@@ -119,15 +120,6 @@ data class SwExpenseUser(
 
 @Serializable
 data class SwReceipt(val original: String? = null, val large: String? = null)
-
-@Serializable
-data class SwCategoriesResponse(val categories: List<SwTopCategory>)
-
-@Serializable
-data class SwTopCategory(val id: Long, val name: String, val icon: String? = null, val subcategories: List<SwSubcategory> = emptyList())
-
-@Serializable
-data class SwSubcategory(val id: Long, val name: String, val icon: String? = null)
 
 @Serializable
 data class SwCurrenciesResponse(val currencies: List<SwCurrency>)

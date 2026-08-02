@@ -9,7 +9,7 @@ import app.splitup.shared.domain.repository.PersonRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 
 class RoomPersonRepository(
     private val dao: PersonDao,

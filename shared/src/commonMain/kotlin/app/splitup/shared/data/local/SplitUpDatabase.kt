@@ -1,28 +1,24 @@
 package app.splitup.shared.data.local
 
-import androidx.room.ConstructedBy
-import androidx.room.Database
-import androidx.room.RoomDatabase
-import androidx.room.RoomDatabaseConstructor
-import androidx.room.TypeConverters
-import app.splitup.shared.data.local.dao.CategoryDao
+import androidx.room3.ConstructedBy
+import androidx.room3.Database
+import androidx.room3.RoomDatabase
+import androidx.room3.RoomDatabaseConstructor
+import androidx.room3.ColumnTypeConverters
 import app.splitup.shared.data.local.dao.CommentDao
-import app.splitup.shared.data.local.dao.ExchangeRateDao
 import app.splitup.shared.data.local.dao.ExpenseDao
 import app.splitup.shared.data.local.dao.GroupDao
 import app.splitup.shared.data.local.dao.MaintenanceDao
 import app.splitup.shared.data.local.dao.PersonDao
-import app.splitup.shared.data.local.dao.SettlementDao
+import app.splitup.shared.data.local.dao.SyncSeedDao
 import app.splitup.shared.data.local.dao.UserPreferencesDao
-import app.splitup.shared.data.local.entity.CategoryEntity
 import app.splitup.shared.data.local.entity.CommentEntity
-import app.splitup.shared.data.local.entity.ExchangeRateEntity
 import app.splitup.shared.data.local.entity.ExpenseEntity
 import app.splitup.shared.data.local.entity.ExpenseShareEntity
 import app.splitup.shared.data.local.entity.GroupEntity
 import app.splitup.shared.data.local.entity.GroupMemberEntity
 import app.splitup.shared.data.local.entity.PersonEntity
-import app.splitup.shared.data.local.entity.SettlementEntity
+import app.splitup.shared.data.local.entity.SyncSeedEntity
 import app.splitup.shared.data.local.entity.UserPreferencesEntity
 
 @Database(
@@ -32,27 +28,23 @@ import app.splitup.shared.data.local.entity.UserPreferencesEntity
         GroupMemberEntity::class,
         ExpenseEntity::class,
         ExpenseShareEntity::class,
-        SettlementEntity::class,
         CommentEntity::class,
-        CategoryEntity::class,
-        ExchangeRateEntity::class,
+        SyncSeedEntity::class,
         UserPreferencesEntity::class,
     ],
-    version = 1,
+    version = 6,
     exportSchema = true,
 )
-@TypeConverters(Converters::class)
+@ColumnTypeConverters(Converters::class)
 @ConstructedBy(SplitUpDatabaseConstructor::class)
 abstract class SplitUpDatabase : RoomDatabase() {
     abstract fun personDao(): PersonDao
     abstract fun groupDao(): GroupDao
     abstract fun expenseDao(): ExpenseDao
-    abstract fun settlementDao(): SettlementDao
     abstract fun commentDao(): CommentDao
-    abstract fun categoryDao(): CategoryDao
-    abstract fun exchangeRateDao(): ExchangeRateDao
     abstract fun userPreferencesDao(): UserPreferencesDao
     abstract fun maintenanceDao(): MaintenanceDao
+    abstract fun syncSeedDao(): SyncSeedDao
 }
 
 /**

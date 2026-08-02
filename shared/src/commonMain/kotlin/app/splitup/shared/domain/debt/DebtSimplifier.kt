@@ -81,6 +81,32 @@ object DebtSimplifier {
         return out
     }
 
+    /**
+     * Net pairwise position of every other person toward [me], per currency:
+     * positive = they owe me, negative = I owe them. One pass over all
+     * expenses — backs the Friends tab rows and the friend-detail header.
+     */
+    fun balancesToward(expenses: List<Expense>, me: PersonId): Map<PersonId, Map<Currency, Money>> {
+        val out = HashMap<PersonId, MutableMap<Currency, Long>>()
+        for (d in debtsFromExpenses(expenses)) {
+            when {
+                d.to == me -> out.getOrPut(d.from) { HashMap() }
+                    .merge(d.amount.currency, d.amount.minorUnits, Long::plus)
+                d.from == me -> out.getOrPut(d.to) { HashMap() }
+                    .merge(d.amount.currency, -d.amount.minorUnits, Long::plus)
+            }
+        }
+        return out.mapValues { (_, byCurrency) ->
+            byCurrency.filterValues { it != 0L }.mapValues { Money.ofMinor(it.value, it.key) }
+        }.filterValues { it.isNotEmpty() }
+    }
+
+    /** [person]'s net position per currency: positive = they are owed. Zero entries dropped. */
+    fun netOf(expenses: List<Expense>, person: PersonId): Map<Currency, Money> =
+        balances(expenses).mapNotNull { (currency, byPerson) ->
+            byPerson[person]?.takeIf { !it.isZero }?.let { currency to it }
+        }.toMap()
+
     fun balances(expenses: List<Expense>): Map<Currency, Map<PersonId, Money>> {
         val out: MutableMap<Currency, MutableMap<PersonId, Long>> = HashMap()
         for (e in expenses) {

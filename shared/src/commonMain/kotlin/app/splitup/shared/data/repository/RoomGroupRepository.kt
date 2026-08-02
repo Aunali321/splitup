@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 
 class RoomGroupRepository(
     private val dao: GroupDao,

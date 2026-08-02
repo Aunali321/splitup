@@ -1,7 +1,8 @@
 package app.splitup.shared.data.local
 
-import androidx.room.RoomDatabase
+import androidx.room3.RoomDatabase
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import com.powersync.integrations.room.loadPowerSyncExtension
 import kotlinx.coroutines.Dispatchers
 
 /**
@@ -14,7 +15,10 @@ expect class DatabaseFactory {
 
 fun DatabaseFactory.build(): SplitUpDatabase =
     roomBuilder()
-        .setDriver(BundledSQLiteDriver())
+        // The extension has to be loaded on the driver Room opens, because PowerSync
+        // reads and writes through this same connection rather than its own database.
+        .setDriver(BundledSQLiteDriver().also { it.loadPowerSyncExtension() })
         .setQueryCoroutineContext(Dispatchers.IO)
-        .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = false)
+        // Pre-release: schema changes wipe and recreate rather than migrate.
+        .fallbackToDestructiveMigration(dropAllTables = true)
         .build()

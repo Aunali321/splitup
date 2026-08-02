@@ -1,9 +1,11 @@
 package app.splitup.shared.data.local.entity
 
-import androidx.room.Entity
-import androidx.room.Index
-import androidx.room.PrimaryKey
-import kotlinx.datetime.Instant
+import androidx.room3.Embedded
+import androidx.room3.Entity
+import androidx.room3.Index
+import androidx.room3.PrimaryKey
+import androidx.room3.Relation
+import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 
 @Entity(
@@ -43,12 +45,27 @@ data class ExpenseEntity(
 
 @Entity(
     tableName = "expense_share",
-    primaryKeys = ["expense_id", "person_id"],
-    indices = [Index("person_id")],
+    indices = [
+        Index("expense_id", "person_id", unique = true),
+        Index("person_id"),
+    ],
 )
 data class ExpenseShareEntity(
+    @PrimaryKey val id: String,
     val expense_id: String,
     val person_id: String,
     val paid_minor_units: Long,
     val owed_minor_units: Long,
+)
+
+fun shareId(expenseId: String, personId: String): String = "$expenseId:$personId"
+
+/**
+ * Expense with its shares loaded through a Room relation, so observers
+ * re-emit on writes to either table.
+ */
+data class ExpenseWithShares(
+    @Embedded val expense: ExpenseEntity,
+    @Relation(parentColumns = ["id"], entityColumns = ["expense_id"])
+    val shares: List<ExpenseShareEntity>,
 )

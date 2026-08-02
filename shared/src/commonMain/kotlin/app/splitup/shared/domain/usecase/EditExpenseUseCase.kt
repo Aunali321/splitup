@@ -1,13 +1,16 @@
 package app.splitup.shared.domain.usecase
 
+import app.splitup.shared.domain.model.CategoryId
 import app.splitup.shared.domain.model.Expense
 import app.splitup.shared.domain.model.Money
 import app.splitup.shared.domain.model.PersonId
+import app.splitup.shared.domain.model.RepeatInterval
 import app.splitup.shared.domain.repository.ExpenseRepository
 import app.splitup.shared.domain.split.SplitCalculator
 import app.splitup.shared.domain.split.SplitStrategy
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
 
 /**
  * Re-runs the split engine for an existing expense and saves it in place, preserving
@@ -17,6 +20,7 @@ import kotlinx.datetime.LocalDate
 class EditExpenseUseCase(
     private val expenses: ExpenseRepository,
     private val clock: Clock = Clock.System,
+    private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
 ) {
     suspend operator fun invoke(input: Input): Expense {
         val shares = SplitCalculator.calculate(
@@ -28,8 +32,13 @@ class EditExpenseUseCase(
             description = input.description,
             cost = input.total,
             date = input.date,
+            categoryId = input.categoryId,
+            notes = input.notes,
             splitStrategy = input.strategy,
             shares = shares,
+            repeatInterval = input.repeatInterval,
+            nextRepeatAt = nextRepeatAt(input.repeatInterval, input.date, timeZone),
+            receiptUrl = input.receiptUrl,
             updatedAt = clock.now(),
         )
         expenses.save(updated)
@@ -41,7 +50,11 @@ class EditExpenseUseCase(
         val description: String,
         val total: Money,
         val date: LocalDate,
+        val categoryId: CategoryId,
+        val notes: String?,
         val payers: Map<PersonId, Money>,
         val strategy: SplitStrategy,
+        val repeatInterval: RepeatInterval,
+        val receiptUrl: String?,
     )
 }

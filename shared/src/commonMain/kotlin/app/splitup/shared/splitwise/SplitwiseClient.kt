@@ -65,9 +65,6 @@ class SplitwiseClient(
     suspend fun getFriends(): List<SwFriend> =
         client.get("get_friends").body<SwFriendsResponse>().friends
 
-    suspend fun getCategories(): List<SwTopCategory> =
-        client.get("get_categories").body<SwCategoriesResponse>().categories
-
     suspend fun getCurrencies(): List<SwCurrency> =
         client.get("get_currencies").body<SwCurrenciesResponse>().currencies
 

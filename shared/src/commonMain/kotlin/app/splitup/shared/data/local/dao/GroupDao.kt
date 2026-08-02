@@ -1,9 +1,9 @@
 package app.splitup.shared.data.local.dao
 
-import androidx.room.Dao
-import androidx.room.Query
-import androidx.room.Transaction
-import androidx.room.Upsert
+import androidx.room3.Dao
+import androidx.room3.Query
+import androidx.room3.Transaction
+import androidx.room3.Upsert
 import app.splitup.shared.data.local.entity.GroupEntity
 import app.splitup.shared.data.local.entity.GroupMemberEntity
 import kotlinx.coroutines.flow.Flow
@@ -44,6 +44,30 @@ interface GroupDao {
     @Query("UPDATE group_ SET archived_at = :now WHERE id = :id")
     suspend fun archive(id: String, now: Long)
 
+    @Query("DELETE FROM expense_share WHERE expense_id IN (SELECT id FROM expense WHERE group_id = :groupId)")
+    suspend fun deleteExpenseShares(groupId: String)
+
+    @Query("DELETE FROM comment WHERE expense_id IN (SELECT id FROM expense WHERE group_id = :groupId)")
+    suspend fun deleteExpenseComments(groupId: String)
+
+    @Query("DELETE FROM expense WHERE group_id = :groupId")
+    suspend fun deleteExpenses(groupId: String)
+
     @Query("DELETE FROM group_ WHERE id = :id")
-    suspend fun delete(id: String)
+    suspend fun deleteRow(id: String)
+
+    /**
+     * Removes the group and everything in it. The group row goes before the
+     * memberships: the sync triggers replay this order, and the server authorizes
+     * a group DELETE against the caller's still-existing membership, cascading the
+     * membership rows itself.
+     */
+    @Transaction
+    suspend fun delete(id: String) {
+        deleteExpenseShares(id)
+        deleteExpenseComments(id)
+        deleteExpenses(id)
+        deleteRow(id)
+        replaceMembers(id)
+    }
 }

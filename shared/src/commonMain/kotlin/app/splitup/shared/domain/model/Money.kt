@@ -57,8 +57,29 @@ data class Currency(
         val NGN = Currency("NGN", "₦", 2, "Nigerian Naira")
         val KES = Currency("KES", "KSh", 2, "Kenyan Shilling")
         val ILS = Currency("ILS", "₪", 2, "Israeli Shekel")
+
+        // Every ISO 4217 currency with a non-2 minor unit. Codes outside this table
+        // fall back to 2 decimals, which is correct for all remaining currencies.
+        val CLP = Currency("CLP", "CLP$", 0, "Chilean Peso")
+        val ISK = Currency("ISK", "kr", 0, "Icelandic Króna")
+        val PYG = Currency("PYG", "₲", 0, "Paraguayan Guaraní")
+        val UGX = Currency("UGX", "USh", 0, "Ugandan Shilling")
+        val RWF = Currency("RWF", "FRw", 0, "Rwandan Franc")
+        val GNF = Currency("GNF", "FG", 0, "Guinean Franc")
+        val BIF = Currency("BIF", "FBu", 0, "Burundian Franc")
+        val DJF = Currency("DJF", "Fdj", 0, "Djiboutian Franc")
+        val KMF = Currency("KMF", "CF", 0, "Comorian Franc")
+        val VUV = Currency("VUV", "VT", 0, "Vanuatu Vatu")
+        val XAF = Currency("XAF", "FCFA", 0, "Central African CFA Franc")
+        val XOF = Currency("XOF", "CFA", 0, "West African CFA Franc")
+        val XPF = Currency("XPF", "₣", 0, "CFP Franc")
         val BHD = Currency("BHD", ".د.ب", 3, "Bahraini Dinar")
         val KWD = Currency("KWD", "د.ك", 3, "Kuwaiti Dinar")
+        val IQD = Currency("IQD", "ع.د", 3, "Iraqi Dinar")
+        val JOD = Currency("JOD", "د.ا", 3, "Jordanian Dinar")
+        val LYD = Currency("LYD", "ل.د", 3, "Libyan Dinar")
+        val OMR = Currency("OMR", "ر.ع.", 3, "Omani Rial")
+        val TND = Currency("TND", "د.ت", 3, "Tunisian Dinar")
 
         /** Fallback currency before the user completes onboarding. */
         val DEFAULT: Currency = USD
@@ -69,7 +90,9 @@ data class Currency(
             NPR, LKR, PKR, BDT,
             NZD, ZAR, BRL, MXN, TRY, RUB,
             SEK, NOK, DKK, PLN, HKD, TWD,
-            EGP, NGN, KES, ILS, BHD, KWD,
+            EGP, NGN, KES, ILS,
+            CLP, ISK, PYG, UGX, RWF, GNF, BIF, DJF, KMF, VUV, XAF, XOF, XPF,
+            BHD, KWD, IQD, JOD, LYD, OMR, TND,
         )
 
         private val byCode: Map<String, Currency> = ALL.associateBy { it.code }
@@ -83,7 +106,7 @@ data class Currency(
 
 /**
  * Currency-safe amount stored in the currency's minor units (cents, paise, yen).
- * Cross-currency arithmetic throws; conversion is explicit via [CurrencyConverter].
+ * Cross-currency arithmetic throws — amounts never convert implicitly.
  */
 @Serializable
 data class Money(
@@ -124,11 +147,11 @@ data class Money(
     fun format(): String {
         val sign = if (minorUnits < 0) "-" else ""
         val mag = if (minorUnits < 0) -minorUnits else minorUnits
-        if (currency.decimals == 0) return "$sign${currency.symbol}$mag"
         val major = mag / currency.scale
-        val minor = mag % currency.scale
-        val padded = minor.toString().padStart(currency.decimals, '0')
-        return "$sign${currency.symbol}$major.$padded"
+        val grouped = groupDigits(major.toString(), indian = currency.code in LAKH_GROUPED)
+        if (currency.decimals == 0) return "$sign${currency.symbol}$grouped"
+        val padded = (mag % currency.scale).toString().padStart(currency.decimals, '0')
+        return "$sign${currency.symbol}$grouped.$padded"
     }
 
     /** The amount as a plain editable number, no currency symbol: 1250 paise → "12.50", ¥1250 → "1250". */
@@ -142,6 +165,28 @@ data class Money(
     }
 
     companion object {
+        /** Currencies conventionally grouped by lakh/crore rather than thousands. */
+        private val LAKH_GROUPED = setOf("INR", "NPR", "PKR", "BDT", "LKR")
+
+        /** Thousands separators: 1,234,567 — or Indian lakh/crore grouping (12,34,567). */
+        private fun groupDigits(digits: String, indian: Boolean): String {
+            if (digits.length <= 3) return digits
+            return if (indian) {
+                val head = digits.dropLast(3)
+                val groups = buildList {
+                    var rest = head
+                    while (rest.length > 2) {
+                        add(rest.takeLast(2))
+                        rest = rest.dropLast(2)
+                    }
+                    if (rest.isNotEmpty()) add(rest)
+                }.reversed()
+                (groups + digits.takeLast(3)).joinToString(",")
+            } else {
+                digits.reversed().chunked(3).joinToString(",").reversed()
+            }
+        }
+
         fun zero(currency: Currency): Money = Money(0L, currency)
         fun ofMinor(minorUnits: Long, currency: Currency): Money = Money(minorUnits, currency)
 
@@ -154,11 +199,15 @@ data class Money(
             require(parts.size in 1..2) { "Invalid amount: $value" }
             val major = parts[0].toLong()
             val minor = if (parts.size == 2) {
-                val frac = parts[1].padEnd(currency.decimals, '0')
-                require(frac.length == currency.decimals) {
+                // Sources like the Splitwise API pad decimals ("1000.0" JPY), so
+                // trailing zeros are fine; only significant digits beyond the
+                // currency's scale are real precision loss.
+                val significant = parts[1].trimEnd('0')
+                require(significant.length <= currency.decimals) {
                     "Too many decimal places for ${currency.code}: $value"
                 }
-                frac.toLong()
+                val frac = significant.padEnd(currency.decimals, '0')
+                if (frac.isEmpty()) 0L else frac.toLong()
             } else 0L
             val total = major * currency.scale + minor
             return Money(if (negative) -total else total, currency)

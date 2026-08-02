@@ -1,9 +1,9 @@
 package app.splitup.shared.data.local.entity
 
-import androidx.room.Entity
-import androidx.room.Index
-import androidx.room.PrimaryKey
-import kotlinx.datetime.Instant
+import androidx.room3.Entity
+import androidx.room3.Index
+import androidx.room3.PrimaryKey
+import kotlin.time.Instant
 
 @Entity(
     tableName = "person",
@@ -15,6 +15,8 @@ import kotlinx.datetime.Instant
 )
 data class PersonEntity(
     @PrimaryKey val id: String,
+    /** The account this person *is*, not an owner. Null until they register. */
+    val account_id: String?,
     val first_name: String,
     val last_name: String?,
     val email: String?,
@@ -22,6 +24,7 @@ data class PersonEntity(
     val avatar_url: String?,
     val default_currency_code: String,
     val country_code: String?,
+    /** Per-install, so excluded from sync in both directions. */
     val is_me: Boolean,
     val is_registered: Boolean,
     val external_source: String?,

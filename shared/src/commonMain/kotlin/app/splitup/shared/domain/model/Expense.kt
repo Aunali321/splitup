@@ -1,8 +1,10 @@
 package app.splitup.shared.domain.model
 
 import app.splitup.shared.domain.split.SplitStrategy
-import kotlinx.datetime.Instant
+import kotlinx.datetime.DatePeriod
+import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.plus
 import kotlinx.serialization.Serializable
 
 /**
@@ -71,3 +73,15 @@ data class ExpenseShare(
 
 @Serializable
 enum class RepeatInterval { NEVER, DAILY, WEEKLY, FORTNIGHTLY, MONTHLY, YEARLY }
+
+/** The occurrence after [from]. Only meaningful for real intervals. */
+fun RepeatInterval.next(from: LocalDate): LocalDate = from.plus(
+    when (this) {
+        RepeatInterval.NEVER -> throw IllegalArgumentException("NEVER does not recur")
+        RepeatInterval.DAILY -> DatePeriod(days = 1)
+        RepeatInterval.WEEKLY -> DatePeriod(days = 7)
+        RepeatInterval.FORTNIGHTLY -> DatePeriod(days = 14)
+        RepeatInterval.MONTHLY -> DatePeriod(months = 1)
+        RepeatInterval.YEARLY -> DatePeriod(years = 1)
+    },
+)

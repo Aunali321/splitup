@@ -1,6 +1,6 @@
 package app.splitup.shared.domain.model
 
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -14,6 +14,8 @@ data class Person(
     val defaultCurrencyCode: String = "USD",
     val countryCode: String? = null,
     val isMe: Boolean = false,
+    /** The account this person *is*, not an owner. Null until they register. */
+    val accountId: String? = null,
     val isRegistered: Boolean = false,
     val externalSource: ExternalSource? = null,
     val externalId: String? = null,

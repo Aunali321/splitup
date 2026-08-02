@@ -10,8 +10,9 @@ import app.splitup.shared.domain.model.RepeatInterval
 import app.splitup.shared.domain.repository.ExpenseRepository
 import app.splitup.shared.domain.split.SplitCalculator
 import app.splitup.shared.domain.split.SplitStrategy
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
 
 /**
  * Validates inputs, runs the split engine, persists the resulting Expense.
@@ -19,6 +20,7 @@ import kotlinx.datetime.LocalDate
 class AddExpenseUseCase(
     private val expenses: ExpenseRepository,
     private val clock: Clock = Clock.System,
+    private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
     private val idGenerator: () -> String,
 ) {
     suspend operator fun invoke(input: Input): Expense {
@@ -40,6 +42,8 @@ class AddExpenseUseCase(
             splitStrategy = input.strategy,
             shares = shares,
             repeatInterval = input.repeatInterval,
+            nextRepeatAt = nextRepeatAt(input.repeatInterval, input.date, timeZone),
+            receiptUrl = input.receiptUrl,
             createdAt = now,
             updatedAt = now,
         )
@@ -58,5 +62,6 @@ class AddExpenseUseCase(
         val payers: Map<PersonId, Money>,
         val strategy: SplitStrategy,
         val repeatInterval: RepeatInterval = RepeatInterval.NEVER,
+        val receiptUrl: String? = null,
     )
 }

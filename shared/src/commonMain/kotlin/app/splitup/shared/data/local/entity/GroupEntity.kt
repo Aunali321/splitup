@@ -1,9 +1,9 @@
 package app.splitup.shared.data.local.entity
 
-import androidx.room.Entity
-import androidx.room.Index
-import androidx.room.PrimaryKey
-import kotlinx.datetime.Instant
+import androidx.room3.Entity
+import androidx.room3.Index
+import androidx.room3.PrimaryKey
+import kotlin.time.Instant
 
 @Entity(
     tableName = "group_",
@@ -17,6 +17,8 @@ data class GroupEntity(
     val cover_url: String?,
     val default_currency_code: String,
     val simplify_by_default: Boolean,
+    /** JSON-encoded SplitStrategy, or null when new expenses default to equal. */
+    val default_split_json: String?,
     val whiteboard: String?,
     val external_source: String?,
     val external_id: String?,
@@ -27,12 +29,17 @@ data class GroupEntity(
 
 @Entity(
     tableName = "group_member",
-    primaryKeys = ["group_id", "person_id"],
-    indices = [Index("person_id")],
+    indices = [
+        Index("group_id", "person_id", unique = true),
+        Index("person_id"),
+    ],
 )
 data class GroupMemberEntity(
+    @PrimaryKey val id: String,
     val group_id: String,
     val person_id: String,
     val role: String,
     val joined_at: Instant,
 )
+
+fun memberId(groupId: String, personId: String): String = "$groupId:$personId"

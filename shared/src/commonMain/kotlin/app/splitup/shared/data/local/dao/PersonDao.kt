@@ -1,10 +1,10 @@
 package app.splitup.shared.data.local.dao
 
-import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
-import androidx.room.Query
-import androidx.room.Upsert
+import androidx.room3.Dao
+import androidx.room3.Insert
+import androidx.room3.OnConflictStrategy
+import androidx.room3.Query
+import androidx.room3.Upsert
 import app.splitup.shared.data.local.entity.PersonEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -33,9 +33,6 @@ interface PersonDao {
 
     @Upsert
     suspend fun upsert(person: PersonEntity)
-
-    @Upsert
-    suspend fun upsertAll(people: List<PersonEntity>)
 
     @Query("UPDATE person SET deleted_at = :now WHERE id = :id")
     suspend fun softDelete(id: String, now: Long)
