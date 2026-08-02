@@ -15,8 +15,8 @@ kotlin {
         compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
     }
     jvm()
+    // iosX64 (Intel simulator) is dropped by Room 3, androidx.sqlite 2.7 and PowerSync.
     listOf(
-        iosX64(),
         iosArm64(),
         iosSimulatorArm64(),
     ).forEach { target ->
@@ -41,17 +41,17 @@ kotlin {
 
             implementation(libs.room.runtime)
             implementation(libs.sqlite.bundled)
+
+            implementation(libs.powersync.core)
+            implementation(libs.powersync.room)
         }
 
         commonTest.dependencies {
             implementation(libs.kotlin.test)
-            implementation(libs.coroutines.test)
-            implementation(libs.turbine)
-            implementation(libs.kotest.assertions)
-            implementation(libs.kotest.property)
         }
 
         androidMain.dependencies {
+            implementation(libs.androidx.security.crypto)
             implementation(libs.ktor.client.okhttp)
             implementation(libs.coroutines.android)
         }
@@ -74,7 +74,7 @@ kotlin {
 
 android {
     namespace = "app.splitup.shared"
-    compileSdk = 35
+    compileSdk = 36
     defaultConfig { minSdk = 26 }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -82,14 +82,13 @@ android {
     }
 }
 
-room {
+room3 {
     schemaDirectory("$projectDir/schemas")
 }
 
 dependencies {
     add("kspAndroid", libs.room.compiler)
     add("kspJvm", libs.room.compiler)
-    add("kspIosX64", libs.room.compiler)
     add("kspIosArm64", libs.room.compiler)
     add("kspIosSimulatorArm64", libs.room.compiler)
 }

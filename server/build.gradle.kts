@@ -24,6 +24,7 @@ dependencies {
     implementation(libs.ktor.server.cors)
     implementation(libs.ktor.server.call.logging)
     implementation(libs.ktor.server.rate.limit)
+    implementation(libs.ktor.server.forwarded.header)
     implementation(libs.ktor.serialization.json)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.cio)
@@ -46,12 +47,4 @@ dependencies {
     implementation(libs.nimbus.jose)
 
     implementation(libs.logback)
-
-    testImplementation(libs.kotlin.test)
-    testImplementation(libs.kotlin.test.junit5)
-    testImplementation(libs.junit.jupiter)
-    testRuntimeOnly(libs.junit.jupiter.engine)
-    testImplementation(libs.coroutines.test)
 }
-
-tasks.test { useJUnitPlatform() }

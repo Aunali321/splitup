@@ -21,7 +21,7 @@ kotlin {
         compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
     }
     jvm("desktop")
-    listOf(iosX64(), iosArm64(), iosSimulatorArm64()).forEach {
+    listOf(iosArm64(), iosSimulatorArm64()).forEach {
         it.binaries.framework {
             baseName = "ComposeApp"
             isStatic = true
@@ -54,6 +54,7 @@ kotlin {
         }
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
+            implementation(libs.androidx.biometric)
             implementation(libs.androidx.core.ktx)
             implementation(libs.koin.android)
             implementation(compose.preview)
@@ -69,19 +70,33 @@ kotlin {
 
 android {
     namespace = "app.splitup"
-    compileSdk = 35
+    compileSdk = 36
     defaultConfig {
         applicationId = "app.splitup"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
+    }
+    signingConfigs {
+        // CI provides the release keystore via env; without it assembleRelease
+        // produces an unsigned APK (fine locally, release publishing requires it).
+        create("release") {
+            val keystorePath = System.getenv("SPLITUP_KEYSTORE_PATH")
+            if (keystorePath != null) {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("SPLITUP_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("SPLITUP_KEY_ALIAS")
+                keyPassword = System.getenv("SPLITUP_KEY_PASSWORD")
+            }
+        }
     }
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("release").takeIf { it.storeFile != null }
         }
     }
     compileOptions {
