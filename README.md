@@ -5,7 +5,7 @@ same proven UX, Material 3 Expressive, no upsells, no ads, no Pro-locked feature
 
 ## Status
 
-Early scaffolding. Domain model and split engine are the foundations; UI and sync come next.
+In development. Domain model, split engine, Compose UI (Android/Desktop), Splitwise import, and the self-hostable server work today. Multi-device sync is server-side only — the PowerSync client integration has not shipped, so devices do not sync yet. iOS is a compile target without an app shell.
 
 ## Stack
 
@@ -14,9 +14,9 @@ Early scaffolding. Domain model and split engine are the foundations; UI and syn
 | Client UI | Compose Multiplatform 1.8 | Android + iOS + Desktop from one codebase |
 | Design system | Material 3 Expressive | Latest M3 variant; dynamic color on Android |
 | Local DB | Room 2.7 KMP + SQLite (bundled) | Reactive `Flow<T>` queries, KMP-stable since 2024 |
-| Sync | PowerSync + Postgres | OSS, offline-first, Postgres-backed, no lock-in |
+| Sync | PowerSync + Postgres (server side ready, client pending) | OSS, offline-first, Postgres-backed, no lock-in |
 | Backend | Ktor 3 + Postgres 17 + Flyway | Kotlin all the way, single Docker stack |
-| Auth | Paseto v4 + Argon2id | Modern, no JWT footguns |
+| Auth | HS256 JWT + server-side session revocation + Argon2id | Separate audiences for API and sync tokens |
 | Push | UnifiedPush (ntfy) | Google-free; self-hostable |
 | OCR | Veryfi/Mindee (BYO) or olmOCR (self-hosted) | User chooses paid or self-host |
 | Bank sync | Plaid (optional, BYO keys) | Opt-in only |
@@ -27,7 +27,6 @@ Early scaffolding. Domain model and split engine are the foundations; UI and syn
 splitup/
 ├── shared/              KMP library — domain, data, repository (Android/iOS/Desktop/JVM)
 ├── composeApp/          Compose Multiplatform UI (Android, Desktop, iOS framework)
-├── iosApp/              Xcode shell that links the iOS framework
 ├── server/              Ktor 3 backend + Postgres migrations + sync rules
 └── deploy/              docker-compose for self-hosting
 ```
