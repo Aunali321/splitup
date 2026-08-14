@@ -10,7 +10,6 @@ import app.splitup.shared.domain.split.SplitCalculator
 import app.splitup.shared.domain.split.SplitStrategy
 import kotlin.time.Clock
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.TimeZone
 
 /**
  * Re-runs the split engine for an existing expense and saves it in place, preserving
@@ -20,7 +19,6 @@ import kotlinx.datetime.TimeZone
 class EditExpenseUseCase(
     private val expenses: ExpenseRepository,
     private val clock: Clock = Clock.System,
-    private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
 ) {
     suspend operator fun invoke(input: Input): Expense {
         val shares = SplitCalculator.calculate(
@@ -37,7 +35,16 @@ class EditExpenseUseCase(
             splitStrategy = input.strategy,
             shares = shares,
             repeatInterval = input.repeatInterval,
-            nextRepeatAt = nextRepeatAt(input.repeatInterval, input.date, timeZone),
+            // Only a schedule change restarts the series. Recomputing on every edit
+            // would rewind it to the second occurrence and re-create everything since.
+            nextRepeatAt = if (
+                input.repeatInterval == input.original.repeatInterval &&
+                input.date == input.original.date
+            ) {
+                input.original.nextRepeatAt
+            } else {
+                nextRepeatAt(input.repeatInterval, input.date)
+            },
             receiptUrl = input.receiptUrl,
             updatedAt = clock.now(),
         )

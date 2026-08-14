@@ -74,14 +74,19 @@ data class ExpenseShare(
 @Serializable
 enum class RepeatInterval { NEVER, DAILY, WEEKLY, FORTNIGHTLY, MONTHLY, YEARLY }
 
-/** The occurrence after [from]. Only meaningful for real intervals. */
-fun RepeatInterval.next(from: LocalDate): LocalDate = from.plus(
+/**
+ * The [n]th occurrence of a series anchored at [anchor]. Always measured from the
+ * anchor rather than by stepping off the previous occurrence, because month-end
+ * dates clamp: a monthly series from Jan 31 gives Feb 28, Mar 31, Apr 30, whereas
+ * stepping would clamp to Feb 28 and then stay on the 28th forever.
+ */
+fun RepeatInterval.occurrence(anchor: LocalDate, n: Int): LocalDate = anchor.plus(
     when (this) {
         RepeatInterval.NEVER -> throw IllegalArgumentException("NEVER does not recur")
-        RepeatInterval.DAILY -> DatePeriod(days = 1)
-        RepeatInterval.WEEKLY -> DatePeriod(days = 7)
-        RepeatInterval.FORTNIGHTLY -> DatePeriod(days = 14)
-        RepeatInterval.MONTHLY -> DatePeriod(months = 1)
-        RepeatInterval.YEARLY -> DatePeriod(years = 1)
+        RepeatInterval.DAILY -> DatePeriod(days = n)
+        RepeatInterval.WEEKLY -> DatePeriod(days = 7 * n)
+        RepeatInterval.FORTNIGHTLY -> DatePeriod(days = 14 * n)
+        RepeatInterval.MONTHLY -> DatePeriod(months = n)
+        RepeatInterval.YEARLY -> DatePeriod(years = n)
     },
 )

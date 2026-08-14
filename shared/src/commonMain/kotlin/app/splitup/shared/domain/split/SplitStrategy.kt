@@ -14,7 +14,12 @@ sealed interface SplitStrategy {
 
     @Serializable
     data class Equal(val participants: List<PersonId>) : SplitStrategy {
-        init { require(participants.isNotEmpty()) { "Equal split needs at least one participant" } }
+        init {
+            require(participants.isNotEmpty()) { "Equal split needs at least one participant" }
+            require(participants.distinct().size == participants.size) {
+                "Duplicate participant in equal split"
+            }
+        }
     }
 
     @Serializable
@@ -50,6 +55,9 @@ sealed interface SplitStrategy {
     ) : SplitStrategy {
         init {
             require(participants.isNotEmpty())
+            require(participants.distinct().size == participants.size) {
+                "Duplicate participant in adjustment split"
+            }
             require(adjustments.keys.all { it in participants }) {
                 "Adjustment for non-participant"
             }

@@ -15,13 +15,16 @@ object GroupCsv {
 
     fun build(expenses: List<Expense>, members: List<Person>): String {
         val rows = buildList {
-            add(listOf("Date", "Description", "Category", "Cost", "Currency") + members.map { it.displayName })
+            add(
+                listOf("Date", "Description", "Category", "Cost", "Currency") +
+                    members.map { defuse(it.displayName) },
+            )
             expenses.forEach { e ->
                 add(
                     listOf(
                         e.date.toString(),
-                        e.description,
-                        DefaultCategories.get(e.categoryId).name,
+                        defuse(e.description),
+                        defuse(DefaultCategories.get(e.categoryId).name),
                         e.cost.toPlainString(),
                         e.currencyCode,
                     ) + members.map { m -> e.balanceFor(m.id).toPlainString() },
@@ -40,6 +43,16 @@ object GroupCsv {
         }
         return rows.joinToString("\n") { row -> row.joinToString(",") { escape(it) } }
     }
+
+    /**
+     * Spreadsheet apps evaluate a cell starting with =, +, -, @, tab or CR as a
+     * formula. Descriptions and display names are written by other group members,
+     * so they are prefixed with an apostrophe to force literal text. Only applied
+     * to member-supplied fields — the amount columns are ours and may start with
+     * a minus legitimately.
+     */
+    private fun defuse(field: String): String =
+        if (field.isNotEmpty() && field[0] in "=+-@\t\r") "'$field" else field
 
     private fun escape(field: String): String =
         if (field.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) {

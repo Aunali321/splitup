@@ -33,6 +33,9 @@ object SplitCalculator {
             is SplitStrategy.Adjustment -> adjustment(total, strategy.participants, strategy.adjustments)
         }
 
+        val owedSum = owedByPerson.values.fold(zero) { acc, m -> acc + m }
+        check(owedSum == total) { "Split produced $owedSum for a total of $total" }
+
         val allIds = (payers.keys + owedByPerson.keys).toSortedSet(compareBy { it.value })
         return allIds.map { id ->
             ExpenseShare(
@@ -69,16 +72,17 @@ object SplitCalculator {
         val raw = sorted.mapValues { (_, basis) -> total.minorUnits * basis / SplitStrategy.Percent.TOTAL_BP }
         val allocated = raw.values.sum()
         val remainder = total.minorUnits - allocated
-        return distributeRemainder(raw, remainder).mapValues { Money.ofMinor(it.value, total.currency) }
+        val eligible = sorted.filterValues { it > 0 }.keys
+        return distributeRemainder(raw, remainder, eligible).mapValues { Money.ofMinor(it.value, total.currency) }
     }
 
     private fun shares(total: Money, parts: Map<PersonId, Int>): Map<PersonId, Money> {
         val sorted = parts.toSortedMap(compareBy { it.value })
-        val totalShares = sorted.values.sum().toLong()
+        val totalShares = sorted.values.sumOf { it.toLong() }
         val raw = sorted.mapValues { (_, n) -> total.minorUnits * n / totalShares }
         val allocated = raw.values.sum()
         val remainder = total.minorUnits - allocated
-        return distributeRemainder(raw, remainder).mapValues { Money.ofMinor(it.value, total.currency) }
+        return distributeRemainder(raw, remainder, sorted.keys).mapValues { Money.ofMinor(it.value, total.currency) }
     }
 
     private fun adjustment(
@@ -95,16 +99,28 @@ object SplitCalculator {
             "Adjustments ($sumAdj) cannot meet or exceed the total ($total)"
         }
         val remaining = total - sumAdj
-        require(!remaining.isNegative) { "Adjustments exceed total" }
         val equalPart = equal(remaining, participants)
         return participants.associateWith { id ->
             (equalPart[id] ?: zero) + (adjustments[id] ?: zero)
+        }.also { owed ->
+            require(owed.values.none { it.isNegative }) {
+                "Adjustments leave a negative share: $owed"
+            }
         }
     }
 
-    private fun distributeRemainder(raw: Map<PersonId, Long>, remainder: Long): Map<PersonId, Long> {
+    /**
+     * Hands the rounding remainder out one minor unit at a time, in ascending
+     * PersonId order, to [eligible] only — a participant weighted at zero must
+     * never be charged a cent they have no share in.
+     */
+    private fun distributeRemainder(
+        raw: Map<PersonId, Long>,
+        remainder: Long,
+        eligible: Set<PersonId>,
+    ): Map<PersonId, Long> {
         if (remainder == 0L) return raw
-        val sortedKeys = raw.keys.sortedBy { it.value }
+        val sortedKeys = eligible.sortedBy { it.value }
         val mutable = raw.toMutableMap()
         if (remainder > 0) {
             var left = remainder

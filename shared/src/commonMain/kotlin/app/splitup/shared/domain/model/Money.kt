@@ -197,7 +197,9 @@ data class Money(
             val body = trimmed.removePrefix("-").removePrefix("+")
             val parts = body.split('.')
             require(parts.size in 1..2) { "Invalid amount: $value" }
-            val major = parts[0].toLong()
+            val major = requireNotNull(parts[0].toLongOrNull()?.takeIf { it >= 0 }) {
+                "Invalid amount: $value"
+            }
             val minor = if (parts.size == 2) {
                 // Sources like the Splitwise API pad decimals ("1000.0" JPY), so
                 // trailing zeros are fine; only significant digits beyond the
@@ -207,13 +209,13 @@ data class Money(
                     "Too many decimal places for ${currency.code}: $value"
                 }
                 val frac = significant.padEnd(currency.decimals, '0')
-                if (frac.isEmpty()) 0L else frac.toLong()
+                if (frac.isEmpty()) 0L else requireNotNull(frac.toLongOrNull()) { "Invalid amount: $value" }
             } else 0L
+            // Reject rather than silently wrap: minor units are a Long, and a pasted
+            // digit string long enough to overflow would land as a plausible amount.
+            require(major <= (Long.MAX_VALUE - minor) / currency.scale) { "Amount out of range: $value" }
             val total = major * currency.scale + minor
             return Money(if (negative) -total else total, currency)
         }
     }
 }
-
-fun Iterable<Money>.sumOrZero(currency: Currency): Money =
-    fold(Money.zero(currency)) { acc, m -> acc + m }
