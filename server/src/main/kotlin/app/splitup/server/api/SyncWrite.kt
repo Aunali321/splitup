@@ -295,8 +295,12 @@ private fun applyGroupMember(op: SyncOp, me: String): String? {
         return null
     }
 
+    // The id is derived from (group, person) on the client. Verifying it here keeps
+    // the row we authorized from being written over some other group's membership row.
+    if (row!!.id != "${row.group_id}:${row.person_id}") return "membership id does not match its group and person"
+
     GroupMemberTable.upsert {
-        it[id] = row!!.id
+        it[id] = row.id
         it[GroupMemberTable.groupId] = row.group_id
         it[personId] = row.person_id
         it[role] = row.role
@@ -360,6 +364,10 @@ private fun applyExpenseShare(op: SyncOp, me: String): String? {
     }
 
     val r = op.decode<ExpenseShareRow>()
+    // Same reasoning as group_member: the id is derived, so verify it rather than
+    // trust it, or a share on an expense we can write could overwrite one we can't.
+    if (r.id != "${r.expense_id}:${r.person_id}") return "share id does not match its expense and person"
+
     ExpenseShareTable.upsert {
         it[id] = r.id
         it[ExpenseShareTable.expenseId] = r.expense_id

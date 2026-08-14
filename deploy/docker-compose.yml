@@ -91,7 +91,7 @@ services:
       PS_STORAGE_SOURCE_URI: postgres://powersync:powersync@pg-storage:5432/powersync
       PS_PORT: 8080
       PS_JWT_SECRET_B64URL: ${SPLITUP_SESSION_SECRET:?run 'openssl rand -base64 32 | tr +/ -_ | tr -d =' and put in .env}
-      PS_MANAGEMENT_TOKEN: ${POWERSYNC_MANAGEMENT_TOKEN:-please-change-me-in-env}
+      PS_MANAGEMENT_TOKEN: ${POWERSYNC_MANAGEMENT_TOKEN:?run 'openssl rand -base64 24' and put in .env}
     ports:
       - "${POWERSYNC_PORT:-8081}:8080"
     volumes:
