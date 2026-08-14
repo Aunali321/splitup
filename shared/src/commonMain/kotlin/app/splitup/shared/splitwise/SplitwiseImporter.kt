@@ -54,6 +54,7 @@ class SplitwiseImporter(
     private val comments: CommentRepository,
     private val idGenerator: IdGenerator,
     private val clock: Clock = Clock.System,
+    private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
 ) {
     data class Result(
         val peopleCount: Int,
@@ -334,9 +335,14 @@ class SplitwiseImporter(
     private fun parseInstantOrNow(s: String?): Instant =
         s?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: clock.now()
 
+    /**
+     * Splitwise stores the date as a UTC timestamp derived from the creator's local
+     * date, so reading it back in UTC moves every expense a day for anyone east of
+     * it. The device's own zone is the closest thing to the date the user entered.
+     */
     private fun parseDateOrToday(s: String?): LocalDate {
         val i = s?.let { runCatching { Instant.parse(it) }.getOrNull() }
-        return (i ?: clock.now()).toLocalDateTime(TimeZone.UTC).date
+        return (i ?: clock.now()).toLocalDateTime(timeZone).date
     }
 }
 

@@ -14,6 +14,7 @@ import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.engine.HttpClientEngine
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.URLBuilder
 import io.ktor.http.takeFrom
 import io.ktor.serialization.kotlinx.json.json
@@ -37,6 +38,9 @@ class SplitwiseClient(
     }
 
     private val client = HttpClient(engine) {
+        // Without this a 401/429 body is handed to the success deserializer and the
+        // user sees "Field 'expenses' is required" instead of what actually happened.
+        expectSuccess = true
         install(ContentNegotiation) { json(json) }
         install(HttpTimeout) {
             requestTimeoutMillis = 30_000
@@ -45,6 +49,9 @@ class SplitwiseClient(
         }
         install(HttpRequestRetry) {
             retryOnServerErrors(maxRetries = 4)
+            // 429 is the limit this API actually enforces, and it is not a server
+            // error, so retryOnServerErrors alone would let a throttle kill the import.
+            retryIf(maxRetries = 4) { _, response -> response.status == HttpStatusCode.TooManyRequests }
             exponentialDelay()
         }
         install(Logging) { level = LogLevel.INFO }
