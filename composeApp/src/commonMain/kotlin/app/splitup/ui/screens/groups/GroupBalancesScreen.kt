@@ -54,9 +54,11 @@ import app.splitup.shared.domain.repository.GroupRepository
 import app.splitup.shared.domain.repository.PersonRepository
 import app.splitup.ui.components.BalanceText
 import app.splitup.ui.components.PersonAvatar
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -107,7 +109,9 @@ class GroupBalancesViewModel(
             me = ppl.firstOrNull { it.isMe }?.id,
             simplifyOn = simplify,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), State())
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), State())
 }
 
 /** Splitwise's per-group Balances screen: member rows with expandable repayments. */

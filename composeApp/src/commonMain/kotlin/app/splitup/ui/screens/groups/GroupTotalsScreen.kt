@@ -54,10 +54,12 @@ import app.splitup.shared.domain.repository.GroupRepository
 import app.splitup.shared.domain.repository.PersonRepository
 import app.splitup.ui.components.CategoryIcon
 import app.splitup.ui.components.ListDivider
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlin.time.Clock
 import kotlinx.datetime.DatePeriod
@@ -115,7 +117,9 @@ class GroupTotalsViewModel(
             period = p,
             totals = me?.let { totalsOf(exps.filter { e -> inPeriod(e.date, p) }, it) }.orEmpty(),
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), State())
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), State())
 
     fun setPeriod(p: Period) {
         period.value = p

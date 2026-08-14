@@ -16,8 +16,12 @@ class AndroidAppLock(private val context: Context) : AppLock {
         this.activity = activity
     }
 
-    fun detach() {
-        activity = null
+    /**
+     * On recreation the incoming activity attaches before the outgoing one is
+     * destroyed, so only the activity that currently holds the slot may clear it.
+     */
+    fun detach(activity: FragmentActivity) {
+        if (this.activity === activity) this.activity = null
     }
 
     override val isAvailable: Boolean

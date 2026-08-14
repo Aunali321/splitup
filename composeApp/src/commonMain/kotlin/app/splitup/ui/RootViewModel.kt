@@ -45,4 +45,11 @@ class RootViewModel(
             if (success) _locked.value = false
         }
     }
+
+    /** Re-arms the lock whenever the app leaves the foreground. */
+    fun relock() {
+        viewModelScope.launch {
+            if (appLock.isAvailable && prefsRepo.get().biometricLock) _locked.value = true
+        }
+    }
 }

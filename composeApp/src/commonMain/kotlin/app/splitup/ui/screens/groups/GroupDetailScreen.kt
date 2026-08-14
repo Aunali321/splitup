@@ -74,15 +74,18 @@ import app.splitup.shared.domain.repository.PersonRepository
 import app.splitup.ui.components.BalanceText
 import app.splitup.ui.components.ExpenseRow
 import app.splitup.ui.components.ListDivider
+import app.splitup.ui.components.LoadingPane
 import app.splitup.ui.components.MonthHeader
 import app.splitup.ui.components.SearchField
 import app.splitup.ui.theme.groupTint
 import app.splitup.ui.util.matching
 import app.splitup.ui.util.monthHeader
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -115,7 +118,9 @@ class GroupDetailViewModel(
             me = me,
             myNetByCurrency = me?.let { DebtSimplifier.netOf(exps, it) }.orEmpty(),
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), State(null, emptyList(), emptyMap(), null, emptyMap()))
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), State(null, emptyList(), emptyMap(), null, emptyMap()))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -167,7 +172,10 @@ fun GroupDetailScreen(
             )
         },
     ) { padding ->
-        if (group == null || me == null) return@Scaffold
+        if (group == null || me == null) {
+            LoadingPane(onBack = onBack, modifier = Modifier.fillMaxSize().padding(padding))
+            return@Scaffold
+        }
 
         LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (!searching) {

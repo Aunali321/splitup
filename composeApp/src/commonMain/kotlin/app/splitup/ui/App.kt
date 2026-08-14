@@ -37,6 +37,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.navigation.NavBackStackEntry
@@ -88,6 +90,8 @@ fun App() {
     val rootViewModel: RootViewModel = koinViewModel()
     val prefs by rootViewModel.preferences.collectAsStateWithLifecycle()
     val locked by rootViewModel.locked.collectAsStateWithLifecycle()
+
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { rootViewModel.relock() }
 
     val darkTheme = when (prefs?.theme) {
         app.splitup.shared.domain.model.ThemePreference.DARK -> true

@@ -44,9 +44,11 @@ import app.splitup.ui.components.ExpenseRow
 import app.splitup.ui.components.ListDivider
 import app.splitup.ui.components.MonthHeader
 import app.splitup.ui.util.monthHeader
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -69,7 +71,9 @@ class NonGroupViewModel(
             me = me,
             myNet = me?.let { DebtSimplifier.netOf(exps, it) }.orEmpty(),
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), State())
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), State())
 }
 
 /** Splitwise's "Non-group expenses" pseudo-group: everything outside a group. */

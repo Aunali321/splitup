@@ -65,6 +65,7 @@ import app.splitup.shared.domain.repository.GroupRepository
 import app.splitup.shared.domain.repository.PersonRepository
 import app.splitup.shared.util.IdGenerator
 import app.splitup.ui.components.ListDivider
+import app.splitup.ui.components.LoadingPane
 import app.splitup.ui.components.PersonAvatar
 import app.splitup.ui.components.categoryVectorFor
 import app.splitup.ui.platform.ImagePicker
@@ -72,9 +73,11 @@ import app.splitup.ui.platform.isLocalReceipt
 import app.splitup.ui.util.formatMedium
 import app.splitup.ui.util.monthAbbr
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
@@ -123,7 +126,9 @@ class ExpenseDetailViewModel(
             me = ppl.firstOrNull { it.isMe }?.id,
             trends = e?.let { trendsFor(it, all) }.orEmpty(),
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), State())
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), State())
 
     private fun trendsFor(e: Expense, all: List<Expense>): List<MonthSpend> {
         val parent = parentOf(e.categoryId)
@@ -177,7 +182,8 @@ class ExpenseDetailViewModel(
 
     fun delete(onDone: () -> Unit) {
         viewModelScope.launch {
-            state.value.expense?.receiptUrl?.takeIf { it.isLocalReceipt() }?.let(imagePicker::discard)
+            // The row survives with a tombstone and still points at its receipt, so the
+            // file outlives the delete; discarding it here would strand a live reference.
             expenses.softDelete(expenseId)
             onDone()
         }
@@ -208,7 +214,10 @@ fun ExpenseDetailScreen(expenseId: String, onBack: () -> Unit, onEdit: () -> Uni
     }
 
     Scaffold { padding ->
-        if (e == null || me == null) return@Scaffold
+        if (e == null || me == null) {
+            LoadingPane(onBack = onBack, modifier = Modifier.fillMaxSize().padding(padding))
+            return@Scaffold
+        }
 
         Column(
             modifier = Modifier

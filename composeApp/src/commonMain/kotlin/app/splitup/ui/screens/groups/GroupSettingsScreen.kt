@@ -61,6 +61,7 @@ import app.splitup.shared.domain.model.Person
 import app.splitup.shared.domain.model.PersonId
 import app.splitup.shared.domain.repository.ExpenseRepository
 import app.splitup.shared.domain.repository.GroupRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import androidx.compose.foundation.layout.height
@@ -78,6 +79,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
@@ -117,7 +119,9 @@ class GroupSettingsViewModel(
                 removableIds = memberIds.filterTo(mutableSetOf()) { DebtSimplifier.netOf(exps, it).isEmpty() },
             )
         }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, State())
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, State())
 
     fun rename(newName: String) = viewModelScope.launch {
         val g = state.value.group ?: return@launch

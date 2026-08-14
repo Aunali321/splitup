@@ -328,6 +328,8 @@ private fun DateRepeatDialog(
     val state = rememberDatePickerState(
         initialSelectedDateMillis = initialDate.atStartOfDayIn(zone).toEpochMilliseconds(),
     )
+    // Held locally so Cancel discards it, the same as the date.
+    var pendingRepeat by remember(repeat) { mutableStateOf(repeat) }
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
@@ -335,6 +337,7 @@ private fun DateRepeatDialog(
                 state.selectedDateMillis?.let {
                     onPick(Instant.fromEpochMilliseconds(it).toLocalDateTime(zone).date)
                 }
+                if (pendingRepeat != repeat) onRepeatChange(pendingRepeat)
                 onDismiss()
             }) { Text("OK") }
         },
@@ -353,8 +356,8 @@ private fun DateRepeatDialog(
                 Text("Repeat", style = MaterialTheme.typography.labelLarge)
                 REPEAT_OPTIONS.forEach { option ->
                     FilterChip(
-                        selected = option == repeat,
-                        onClick = { onRepeatChange(option) },
+                        selected = option == pendingRepeat,
+                        onClick = { pendingRepeat = option },
                         label = { Text(if (option == RepeatInterval.NEVER) "Off" else option.label) },
                     )
                 }

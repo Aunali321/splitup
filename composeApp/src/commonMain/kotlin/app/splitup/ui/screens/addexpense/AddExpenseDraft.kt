@@ -82,15 +82,29 @@ class AddExpenseDraft(
         }
     }
     fun setCurrency(c: Currency) = _state.update { s ->
+        // Re-clean every typed value against the new scale first: "12.50" carried into
+        // JPY is unparseable, which leaves Save disabled under a filled-in amount field.
+        val amount = cleanDecimal(s.amount, c.decimals)
+        val payerInputs = s.payerInputs.mapValues { cleanDecimal(it.value, c.decimals) }
+        val splitInputs = when (s.strategy) {
+            SplitMode.Shares, SplitMode.Percent -> s.splitInputs
+            else -> s.splitInputs.mapValues { cleanDecimal(it.value, c.decimals) }
+        }
         // payers store Money, so re-denominate them in the new currency — otherwise
         // payerError()'s Money math would compare mismatched currencies and throw.
         val payers = if (s.multiplePayers) {
-            parsePayers(s.payerInputs, c)
+            parsePayers(payerInputs, c)
         } else {
-            val total = runCatching { Money.parse(s.amount, c) }.getOrDefault(Money.zero(c))
+            val total = runCatching { Money.parse(amount, c) }.getOrDefault(Money.zero(c))
             s.payers.keys.firstOrNull()?.let { mapOf(it to total) }.orEmpty()
         }
-        s.copy(currency = c, payers = payers)
+        s.copy(
+            currency = c,
+            amount = amount,
+            payerInputs = payerInputs,
+            splitInputs = splitInputs,
+            payers = payers,
+        )
     }
     fun setDate(d: LocalDate) = _state.update { it.copy(date = d) }
     fun setCategory(c: CategoryId) = _state.update { it.copy(categoryId = c) }

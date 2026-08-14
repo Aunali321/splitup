@@ -68,11 +68,13 @@ import app.splitup.ui.components.ListDivider
 import app.splitup.ui.components.SearchField
 import app.splitup.ui.components.SettledUpExpander
 import app.splitup.ui.util.staleSettledCutoff
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
@@ -151,7 +153,9 @@ class GroupsViewModel(
                 filter = filter,
             )
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), State())
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), State())
 
     fun setFilter(filter: BalanceFilter) {
         _filter.value = filter

@@ -60,6 +60,7 @@ import app.splitup.ui.components.ListDivider
 import app.splitup.ui.components.PersonAvatar
 import app.splitup.ui.components.SearchField
 import app.splitup.ui.util.formatEventTime
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -69,6 +70,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlin.time.Instant
 import org.koin.compose.viewmodel.koinViewModel
@@ -120,7 +122,9 @@ class ActivityViewModel(
             groupById = gs.associateBy { it.id },
             me = ppl.firstOrNull { it.isMe }?.id,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), State())
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), State())
 
     fun setQuery(q: String) {
         _query.value = q

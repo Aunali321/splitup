@@ -42,9 +42,11 @@ import app.splitup.shared.domain.repository.PersonRepository
 import app.splitup.ui.components.GroupAvatar
 import app.splitup.ui.components.PersonAvatar
 import app.splitup.ui.components.SectionLabel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -56,7 +58,9 @@ class ExpenseWithViewModel(
 
     val state: StateFlow<State> = combine(groups.observeAll(), people.observeFriends()) { gs, fs ->
         State(groups = gs, friends = fs)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), State())
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), State())
 }
 
 /**

@@ -55,9 +55,11 @@ import app.splitup.ui.components.ListDivider
 import app.splitup.ui.components.PersonAvatar
 import app.splitup.ui.components.SearchField
 import app.splitup.ui.util.matching
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
@@ -97,7 +99,9 @@ class FriendDetailViewModel(
             balance = me?.let { DebtSimplifier.balancesToward(exps, it)[friendId] }.orEmpty(),
             removable = exps.none { e -> e.shares.any { it.personId == friendId } },
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), State())
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), State())
 
     fun remove(onDone: () -> Unit) {
         viewModelScope.launch {

@@ -20,6 +20,7 @@ import java.util.UUID
  */
 class AndroidImagePicker(private val context: Context) : ImagePicker {
 
+    private var owner: ComponentActivity? = null
     private var pickLauncher: ActivityResultLauncher<PickVisualMediaRequest>? = null
     private var cameraLauncher: ActivityResultLauncher<Uri>? = null
     private var pendingPick: CompletableDeferred<Uri?>? = null
@@ -29,6 +30,7 @@ class AndroidImagePicker(private val context: Context) : ImagePicker {
     override val canTakePhoto = true
 
     fun attach(activity: ComponentActivity) {
+        owner = activity
         pickLauncher = activity.registerForActivityResult(
             ActivityResultContracts.PickVisualMedia(),
         ) { uri -> pendingPick?.complete(uri) }
@@ -37,7 +39,13 @@ class AndroidImagePicker(private val context: Context) : ImagePicker {
         ) { saved -> pendingCamera?.complete(saved) }
     }
 
-    fun detach() {
+    /**
+     * On recreation the incoming activity attaches before the outgoing one is
+     * destroyed, so only the activity that currently owns the launchers may clear them.
+     */
+    fun detach(activity: ComponentActivity) {
+        if (owner !== activity) return
+        owner = null
         pickLauncher = null
         cameraLauncher = null
     }

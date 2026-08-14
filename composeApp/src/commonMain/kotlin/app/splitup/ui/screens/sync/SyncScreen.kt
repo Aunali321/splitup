@@ -59,8 +59,10 @@ data class SyncForm(
 ) {
     val canSubmit: Boolean
         get() = serverUrl.isNotBlank() && powerSyncUrl.isNotBlank() &&
-            email.isNotBlank() && password.length >= 8 &&
-            (!registering || displayName.isNotBlank())
+            email.isNotBlank() && password.isNotBlank() &&
+            // The minimum applies to new passwords only; enforcing it on sign-in
+            // would lock out any account that predates it.
+            (!registering || (password.length >= 8 && displayName.isNotBlank()))
 }
 
 class SyncViewModel(

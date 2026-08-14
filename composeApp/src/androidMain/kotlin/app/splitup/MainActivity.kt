@@ -37,8 +37,8 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onDestroy() {
-        (imagePicker as AndroidImagePicker).detach()
-        (appLock as AndroidAppLock).detach()
+        (imagePicker as AndroidImagePicker).detach(this)
+        (appLock as AndroidAppLock).detach(this)
         super.onDestroy()
     }
 

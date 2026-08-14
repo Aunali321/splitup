@@ -32,6 +32,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.splitup.shared.domain.model.GroupId
 import app.splitup.shared.domain.repository.GroupRepository
+import app.splitup.ui.components.LoadingPane
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -62,7 +63,7 @@ class GroupWhiteboardViewModel(
 fun GroupWhiteboardScreen(groupId: String, onBack: () -> Unit) {
     val vm: GroupWhiteboardViewModel = koinViewModel(parameters = { parametersOf(GroupId(groupId)) })
     val group by vm.group.collectAsStateWithLifecycle()
-    val g = group ?: return
+    val g = group ?: return LoadingPane(onBack = onBack, modifier = Modifier.fillMaxSize())
 
     key(g.id) {
         var text by remember { mutableStateOf(g.whiteboard.orEmpty()) }

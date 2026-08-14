@@ -60,12 +60,14 @@ import app.splitup.ui.components.PersonAvatar
 import app.splitup.ui.components.PickDateDialog
 import app.splitup.ui.util.cleanDecimal
 import app.splitup.ui.util.formatShort
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
@@ -112,7 +114,9 @@ class SettleUpViewModel(
             personById = ppl.associateBy { it.id },
             me = me,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), State())
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), State())
 
     /** One net debt per currency between me and the friend, same math as their header. */
     private fun friendDebts(expenses: List<Expense>, me: PersonId?): List<Debt> {
