@@ -1,5 +1,113 @@
 # Work log
 
+## 2026-08-15 — Whole-codebase review, fixes for the confirmed findings
+
+Six parallel reviews (domain, data/sync, server+deploy, Splitwise import, Compose
+UI, build/CI). Everything below was fixed and verified: `:shared:jvmTest` runs 46
+tests green (10 new), `:server:compileKotlin`, `:composeApp:compileKotlinDesktop`
+and `:composeApp:compileDebugKotlinAndroid` all build.
+
+**Recurring expenses were the worst of it.** Three compounding bugs, none covered
+by a test. Occurrences were advanced by stepping off the *previous* occurrence,
+so a monthly series from Jan 31 clamped to Feb 29 and then stayed on the 29th
+forever; `RepeatInterval.next` is replaced by `occurrence(anchor, n)`, which
+measures every occurrence from the template's own date. The due date was stored
+as an `Instant` at *local* midnight and read back through the device's zone, so
+two devices in different zones derived different dates, and since the occurrence
+id is `"<template>@<date>"` they minted two rows for one occurrence and both
+synced — the exact duplication the id scheme exists to prevent. The series is now
+anchored in UTC, while due-ness is still judged against the user's local calendar.
+Finally, `EditExpenseUseCase` recomputed `nextRepeatAt` from the template's date on
+*every* edit, rewinding the series and re-upserting occurrences the user had
+edited or deleted; it now only resets when the date or interval actually changes,
+and materialization skips ids that already exist, so it is strictly additive.
+
+**Split engine.** `equal()` built its map with `mapIndexed{}.toMap()`, so duplicate
+participants collapsed while the divisor still counted them and money vanished —
+duplicates are now rejected in `SplitStrategy.Equal`/`Adjustment` where the other
+preconditions live. The rounding remainder was handed out in id order across *all*
+keys, so a 0%-share participant could be charged a cent; it now goes only to
+participants with non-zero weight. `adjustment()` could produce negative owed
+shares (`exact()` already refused them) and carried a dead `require`. `calculate`
+closes with a post-condition that owed sums to the total, so any future strategy
+fails at the source rather than two layers down in `Expense.init`.
+
+**Money.** `parse` did `major * scale + minor` unchecked, so 18 digits wrapped
+silently into a plausible amount; out-of-range and malformed input (`.50`, `1e5`,
+`--5`) now fail as `IllegalArgumentException` like every other validation here.
+Dead `sumOrZero` removed.
+
+**CSV export** quoted per RFC 4180 but never neutralised formulas, and quoting does
+not stop Excel or Sheets evaluating a leading `=`. Member-supplied fields
+(description, category, display names) are prefixed with an apostrophe; the amount
+columns are deliberately untouched, since they are ours and legitimately start
+with a minus.
+
+**Sync/data.** Saving an expense cleared *all* its shares and re-inserted them,
+which queues a DELETE per share — and on a non-group expense a share is what
+grants write access, so the deletes applied, the re-inserts were refused, and both
+users lost the split. Only departed participants are deleted now. `Person.toEntity`
+silently dropped `deleted_at`, so any later save resurrected a deleted person and
+uploaded the resurrection; `Person` carries `deletedAt` and both mappers preserve
+it. Soft-delete on person/comment and group archive did not move `updated_at`, so
+the server's last-write-wins check discarded the tombstone in favour of an older
+edit. "Erase all data" left PowerSync's bucket checkpoints intact, so signing back
+in resumed from "everything already delivered" and the data never returned;
+`SyncService.resetLocalSyncState()` now calls `disconnectAndClear()`.
+
+**Server.** `group_member` and `expense_share` were authorized on the row's parent
+but written keyed by a client-supplied `id`, so a write you *are* allowed to make
+could land on a row you are not — both ids are derived on the client, so the
+server verifies them instead of trusting them. Not changed: `created_by` on new
+non-group expenses is still unvalidated, deliberately — the 2026-08-02 entry
+removed that rule because it breaks imports, and Splitwise sets the real creator.
+
+**Deploy.** `PS_MANAGEMENT_TOKEN` silently defaulted to `please-change-me-in-env`
+while every sibling secret used the fail-fast `:?` form, and that port is published
+on all interfaces. Now required.
+
+**Importer.** `expectSuccess` was off, so a 401 or 429 body was fed to the success
+deserializer and surfaced as "Field 'expenses' is required"; 429 is also now
+retried, since `retryOnServerErrors` does not cover it and a throttle killed the
+whole import. Dates were converted in UTC, shifting every expense a day for anyone
+east of UTC; they use the device zone.
+
+**UI.** `cleanDecimal` kept only ASCII digits and `.`, so on a German or French
+device the decimal keyboard's comma was *deleted* and "12,50" saved as €1250 —
+both separators are now accepted, with the last one treated as the decimal point
+and earlier ones as grouping. The app lock computed `locked` once in `init` and
+never re-armed, so it was bypassed on every return to the foreground; it re-locks
+on `ON_STOP`. `AndroidAppLock`/`AndroidImagePicker` were detached unconditionally
+in `onDestroy`, and since the incoming activity attaches *before* the outgoing one
+is destroyed, any recreation left biometrics and the picker permanently dead —
+detach now only clears if the caller still owns the slot. Changing currency left
+a stale unparseable amount and a permanently disabled Save. Sign-in enforced the
+8-character minimum meant for registration, locking out older accounts. Delete
+hard-removed the receipt file behind a *soft*-deleted expense. Repeat selection
+applied on Cancel. Detail screens returned early before rendering any chrome,
+leaving a blank page with no way back; they render a `LoadingPane`. All twelve
+`combine` + `stateIn` view-models ran their debt math on `Dispatchers.Main` —
+added `flowOn(Dispatchers.Default)`.
+
+**CI.** The release job had no `contents: write`, so attaching the APK would 403
+on repos with the default read-only token. `versionCode` was pinned to 1 for every
+tag; both it and `versionName` now come from the tag. Keystore patterns added to
+`.gitignore` (nothing sensitive is in history — checked).
+
+**Handoff.** Known-but-unfixed, in rough priority order: an emptied group can still
+be taken over by anyone who knows its id (the bootstrap self-check does not prevent
+this, despite the comment); rejected sync writes are still discarded with
+`batch.complete(null)`, so local and server diverge silently; writes made while
+signed out never upload, because triggers are absent and the catch-up seed is
+once-per-account; `repoint*` mutates primary keys with UPDATE, which the trigger
+scheme cannot express (needs delete + insert); `SplitwiseCategories` maps ids that
+appear invented rather than taken from a live `get_categories` — worth one API call
+to confirm before trusting any imported category; the importer has no per-record
+isolation, so one bad row still costs the whole run; and PKCE is sent alongside a
+`client_secret` with no positive confirmation that Splitwise enforces
+`code_verifier`. None of the sync work has been exercised against a real
+multi-device deployment.
+
 ## 2026-08-02 — Full review fix pass (sync correctness, security, tests)
 
 A review of the whole uncommitted change set surfaced ~17 issues; all fixed.

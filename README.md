@@ -5,16 +5,16 @@ same proven UX, Material 3 Expressive, no upsells, no ads, no Pro-locked feature
 
 ## Status
 
-In development. Domain model, split engine, Compose UI (Android/Desktop), Splitwise import, and the self-hostable server work today. Multi-device sync is server-side only — the PowerSync client integration has not shipped, so devices do not sync yet. iOS is a compile target without an app shell.
+In development. Domain model, split engine, Compose UI (Android/Desktop), Splitwise import, and the self-hostable server work today. The sync client has landed — trigger-based change capture, sign-in, and invite codes — but has not been exercised against a real multi-device deployment. iOS is a compile target without an app shell.
 
 ## Stack
 
 | Layer | Choice | Why |
 |---|---|---|
-| Client UI | Compose Multiplatform 1.8 | Android + iOS + Desktop from one codebase |
+| Client UI | Compose Multiplatform 1.11 | Android + iOS + Desktop from one codebase |
 | Design system | Material 3 Expressive | Latest M3 variant; dynamic color on Android |
-| Local DB | Room 2.7 KMP + SQLite (bundled) | Reactive `Flow<T>` queries, KMP-stable since 2024 |
-| Sync | PowerSync + Postgres (server side ready, client pending) | OSS, offline-first, Postgres-backed, no lock-in |
+| Local DB | Room 3.0 KMP + SQLite (bundled) | Reactive `Flow<T>` queries, KMP-stable since 2024 |
+| Sync | PowerSync + Postgres | OSS, offline-first, Postgres-backed, no lock-in |
 | Backend | Ktor 3 + Postgres 17 + Flyway | Kotlin all the way, single Docker stack |
 | Auth | HS256 JWT + server-side session revocation + Argon2id | Separate audiences for API and sync tokens |
 | Push | UnifiedPush (ntfy) | Google-free; self-hostable |
@@ -33,8 +33,9 @@ splitup/
 
 ## Splitwise importer
 
-One-shot migration: user pastes their Splitwise API key, SplitUp! pulls all
-groups, friends, expenses, comments via the documented public API
+One-shot migration: the user signs in through Splitwise OAuth (with an API-key
+paste as the fallback on platforms without the `splitup://` redirect), and
+SplitUp! pulls all groups, friends, expenses, comments via the documented public API
 (<https://dev.splitwise.com/>), maps categories/currencies, and dedupes via
 `external_id`. After import, SplitUp! is fully independent — no ongoing
 Splitwise dependency.
