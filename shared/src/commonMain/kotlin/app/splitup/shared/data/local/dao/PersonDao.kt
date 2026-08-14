@@ -34,6 +34,8 @@ interface PersonDao {
     @Upsert
     suspend fun upsert(person: PersonEntity)
 
-    @Query("UPDATE person SET deleted_at = :now WHERE id = :id")
+    // updated_at moves too, or the server's last-write-wins check discards the
+    // tombstone in favour of any older edit another device already uploaded.
+    @Query("UPDATE person SET deleted_at = :now, updated_at = :now WHERE id = :id")
     suspend fun softDelete(id: String, now: Long)
 }

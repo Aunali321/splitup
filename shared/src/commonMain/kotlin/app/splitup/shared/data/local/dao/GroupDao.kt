@@ -41,7 +41,7 @@ interface GroupDao {
     @Query("DELETE FROM group_member WHERE group_id = :groupId")
     suspend fun replaceMembers(groupId: String)
 
-    @Query("UPDATE group_ SET archived_at = :now WHERE id = :id")
+    @Query("UPDATE group_ SET archived_at = :now, updated_at = :now WHERE id = :id")
     suspend fun archive(id: String, now: Long)
 
     @Query("DELETE FROM expense_share WHERE expense_id IN (SELECT id FROM expense WHERE group_id = :groupId)")

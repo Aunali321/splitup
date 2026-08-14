@@ -15,7 +15,9 @@ interface CommentDao {
     fun observeForExpense(id: String): Flow<List<CommentEntity>>
 
     @Upsert suspend fun upsert(comment: CommentEntity)
-    @Query("UPDATE comment SET deleted_at = :now WHERE id = :id")
+    // updated_at moves too, or the server's last-write-wins check discards the
+    // tombstone in favour of any older edit another device already uploaded.
+    @Query("UPDATE comment SET deleted_at = :now, updated_at = :now WHERE id = :id")
     suspend fun softDelete(id: String, now: Long)
 }
 

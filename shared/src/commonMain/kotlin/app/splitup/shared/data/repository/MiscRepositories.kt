@@ -6,6 +6,7 @@ import app.splitup.shared.data.local.SplitUpDatabase
 import app.splitup.shared.data.local.dao.CommentDao
 import app.splitup.shared.data.local.dao.MaintenanceDao
 import app.splitup.shared.data.local.dao.UserPreferencesDao
+import app.splitup.shared.data.sync.SyncService
 import app.splitup.shared.data.sync.SyncTriggers
 import app.splitup.shared.data.mapper.toDomain
 import app.splitup.shared.data.mapper.toEntity
@@ -70,14 +71,18 @@ interface LocalDataReset {
 class RoomLocalDataReset(
     private val dao: MaintenanceDao,
     private val syncTriggers: SyncTriggers,
+    private val sync: SyncService,
 ) : LocalDataReset {
     /**
      * Triggers come off and the upload queue is purged first, so a local erase can
-     * never replay as a server-side wipe of groups other people are in.
+     * never replay as a server-side wipe of groups other people are in. PowerSync's
+     * own replication state goes too, or a later sign-in resumes from a checkpoint
+     * that considers every erased row already delivered.
      */
     override suspend fun clearAll() {
         syncTriggers.remove()
         syncTriggers.purgeQueue()
+        sync.resetLocalSyncState()
         dao.clearAll()
     }
 }

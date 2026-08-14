@@ -50,6 +50,7 @@ fun PersonEntity.toDomain() = Person(
     externalSource = external_source?.let { ExternalSource.valueOf(it) },
     externalId = external_id,
     updatedAt = updated_at,
+    deletedAt = deleted_at,
 )
 
 fun Person.toEntity() = PersonEntity(
@@ -67,6 +68,9 @@ fun Person.toEntity() = PersonEntity(
     external_source = externalSource?.name,
     external_id = externalId,
     updated_at = updatedAt,
+    // Dropping this on the way down would resurrect a deleted person on the next
+    // save, and the trigger would upload the resurrection to everyone.
+    deleted_at = deletedAt,
 )
 
 fun GroupEntity.toDomain(members: List<GroupMemberEntity>) = Group(

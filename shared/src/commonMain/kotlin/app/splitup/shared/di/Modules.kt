@@ -59,7 +59,7 @@ val repositoryModule: Module = module {
     single<CommentRepository> { RoomCommentRepository(get(), get()) }
     single<UserPreferencesRepository> { RoomUserPreferencesRepository(get()) }
     single<TransactionRunner> { RoomTransactionRunner(get()) }
-    single<LocalDataReset> { RoomLocalDataReset(get(), get()) }
+    single<LocalDataReset> { RoomLocalDataReset(get(), get(), get()) }
 }
 
 val useCaseModule: Module = module {

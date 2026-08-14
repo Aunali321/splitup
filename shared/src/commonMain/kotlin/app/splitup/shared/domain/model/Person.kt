@@ -20,7 +20,10 @@ data class Person(
     val externalSource: ExternalSource? = null,
     val externalId: String? = null,
     val updatedAt: Instant,
+    val deletedAt: Instant? = null,
 ) {
+    val isDeleted: Boolean get() = deletedAt != null
+
     val displayName: String get() = listOfNotNull(firstName, lastName).joinToString(" ").ifBlank { "Unknown" }
     val initials: String get() {
         val f = firstName.firstOrNull()?.uppercaseChar() ?: '?'

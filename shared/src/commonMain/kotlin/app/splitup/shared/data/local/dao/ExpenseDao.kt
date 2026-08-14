@@ -96,13 +96,20 @@ interface ExpenseDao {
     @Upsert suspend fun upsert(expense: ExpenseEntity)
     @Upsert suspend fun upsertShares(shares: List<ExpenseShareEntity>)
 
-    @Query("DELETE FROM expense_share WHERE expense_id = :expenseId")
-    suspend fun clearShares(expenseId: String)
+    @Query("DELETE FROM expense_share WHERE expense_id = :expenseId AND person_id NOT IN (:keep)")
+    suspend fun deleteSharesExcept(expenseId: String, keep: List<String>)
 
+    /**
+     * Only the participants who actually left are deleted. Clearing every share and
+     * re-inserting would queue a DELETE for each one, and a share is what grants
+     * write access to a non-group expense on the server — so the deletes would apply,
+     * the re-inserts would then be refused, and the expense would be left with no
+     * split at all for everyone on it.
+     */
     @Transaction
     suspend fun upsertWithShares(expense: ExpenseEntity, shares: List<ExpenseShareEntity>) {
         upsert(expense)
-        clearShares(expense.id)
+        deleteSharesExcept(expense.id, shares.map { it.person_id })
         upsertShares(shares)
     }
 

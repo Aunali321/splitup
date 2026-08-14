@@ -153,6 +153,21 @@ class SyncService(
             )
     }
 
+    /**
+     * Forgets the session *and* PowerSync's replication state, for "Erase all data".
+     * A plain [signOut] leaves the bucket checkpoints behind, so signing back in on
+     * the same install would resume from "everything already delivered" and the
+     * erased groups and expenses would never download again.
+     */
+    suspend fun resetLocalSyncState() {
+        runCatching { db?.disconnectAndClear() }
+        db = null
+        triggers.remove()
+        secrets.clear(SESSION_TOKEN_KEY)
+        secrets.clear(ACCOUNT_ID_KEY)
+        _state.value = SyncState.SignedOut
+    }
+
     /** Disconnects and forgets the session. Local data stays on the device. */
     suspend fun signOut() {
         token()?.let { runCatching { api.logout(it) } }
