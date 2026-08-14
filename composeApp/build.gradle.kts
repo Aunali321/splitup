@@ -75,8 +75,10 @@ android {
         applicationId = "app.splitup"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // Tag builds carry the tag; local builds stay on the placeholder. A fixed
+        // versionCode would make every release look like the same build to updaters.
+        versionCode = System.getenv("SPLITUP_VERSION_CODE")?.toInt() ?: 1
+        versionName = System.getenv("SPLITUP_VERSION_NAME")?.removePrefix("v") ?: "0.1.0"
     }
     signingConfigs {
         // CI provides the release keystore via env; without it assembleRelease

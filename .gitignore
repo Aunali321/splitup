@@ -21,3 +21,8 @@ shared/schemas/
 
 # docker-compose secrets — see deploy/.env.example
 deploy/.env
+
+# Signing material. CI decodes the keystore into a temp dir; it never belongs here.
+*.jks
+*.keystore
+keystore.properties
