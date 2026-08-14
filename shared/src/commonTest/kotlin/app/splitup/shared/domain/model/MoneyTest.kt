@@ -89,4 +89,20 @@ class MoneyTest {
         assertEquals(Currency.USD, Currency.ofCode("USD"))
         assertNull(Currency.ofCode("ZZZ"))
     }
+
+    @Test fun amountsThatWouldOverflowMinorUnitsAreRejected() {
+        // 2e17 * 100 wraps to a positive Long, so an unchecked parse would accept
+        // this as a perfectly ordinary $15,532,559,262,904,483.84.
+        assertFailsWith<IllegalArgumentException> {
+            Money.parse("200000000000000000", Currency.USD)
+        }
+    }
+
+    @Test fun malformedInputFailsAsAnIllegalArgument() {
+        for (bad in listOf(".50", "1e5", "--5", "+-5", "abc", "1.2.3")) {
+            assertFailsWith<IllegalArgumentException>("accepted $bad") {
+                Money.parse(bad, Currency.USD)
+            }
+        }
+    }
 }
